@@ -1,0 +1,112 @@
+# Ideas on Ideas
+
+A keyboard-first brainstorming canvas. You put a thought in the middle, branch out without stopping to judge, then come back later to prune and keep the best ideas. Everything is stored in your browser's local storage. There is no server and no account.
+
+## The loop
+
+1. **Grow.** Dump everything. `Tab` goes a level deeper, `Enter` adds the next idea, `Shift+Tab` climbs back up. You never leave the keyboard and nothing gets rated yet.
+2. **Spark.** When you run dry, `S` attaches a provocation to the focused idea ("What is the opposite of...", "Combine X with Y", a random word, a persona, a constraint). Answer it and press `Enter` for another. `T` starts a timed sprint (3, 5, 10 or 15 minutes) that counts new ideas and switches judging off until time is up.
+3. **Prune.** `P` walks the whole map one idea at a time with a spotlight. `1` `2` `3` rate, `X` cuts, arrows skip. Cut ideas fade and strike through but stay on the map until you delete them.
+4. **Harvest.** `H` opens your rated ideas, best first, each with its path back to the center. `C` copies them as Markdown.
+
+## Why it works this way
+
+I looked at the research before designing this, and three findings shaped it.
+
+- **People alone out-generate people in a meeting.** Diehl and Stroebe (1987) found that brainstorming groups produce fewer ideas than the same people working separately, and that "production blocking" (waiting your turn) explains most of the loss. The fix here is zero-latency capture: one keystroke per idea, no modal dialogs, no mouse.
+- **Judging too early costs ideas.** Osborn's original rule was to defer judgment. So rating and cutting live in their own pass (Prune), and a sprint turns them off completely.
+- **Outside stimulus helps when you are stuck.** De Bono's random entry and "po" provocations, and Koestler's idea of bisociation (creativity as two unrelated frames colliding), are the basis of Sparks. The "Collide" spark picks a distant idea on your map and asks how it combines with the focused one; your answer gets a bridge to both.
+
+For convergence, the 1 to 3 rating is weighted dot voting (3 dots for the best, 2, then 1), which is quick and good enough to sort a big pile.
+
+Sources: [Diehl and Stroebe, via SE University PDF](https://homepages.se.edu/cvonbergen/files/2013/01/Productivity-Loss-In-Brainstorming_Toward-the-Solution-of-a-Riddle.pdf), [Koestler's bisociation, The Marginalian](https://www.themarginalian.org/2013/05/20/arthur-koestler-creativity-bisociation/), [How-Now-Wow and dot voting, SessionLab](https://www.sessionlab.com/methods/how-now-wow-matrix), [EUR design toolkit on selection](https://www.eur.nl/en/onderwijsinnovatie/innovation-themes/design-toolkit/selecting), [MindNode shortcut conventions](https://mindnode.com/article/shortcuts-mac).
+
+## Features
+
+- **Map kinds.** Brainstorm, Video, Short, Article, Software, Starburst (who/what/when/where/why/how) and SCAMPER. Each one seeds a few starter branches and weights the spark deck toward that kind of work. A short-form map asks about the first 1.5 seconds and loops; a software map asks who the first user is and what to cut.
+- **More than one center.** `N` adds another central idea on the same map. `L` draws a dotted bridge between any two ideas, across branches or centers.
+- **Four layouts.** `V` cycles mind map (balanced left and right), tree, top-down and radial, with animated transitions.
+- **Jump anywhere.** `F` puts a letter on every visible idea; type it to fly there. `/` searches every idea, including folded ones.
+- **Command palette.** `⌘K` (Ctrl+K on Windows and Linux) finds every action and every map.
+- **Paste lists.** Paste an indented or bulleted list and it becomes a branch. Markdown exported from the app pastes back with ratings and cuts intact.
+- **Export.** Copy a branch, the map or the harvest as Markdown. Download a JSON backup of every map and import it again elsewhere.
+- **Light and dark themes**, following the system by default (`Shift+T` switches).
+- **Touch.** Phones and tablets get a small toolbar, pinch to zoom and drag to pan. It is built for a keyboard first, though.
+
+## Keyboard
+
+`?` in the app shows the full sheet. The ones you'll use constantly:
+
+| Key | Action |
+| --- | --- |
+| `Tab` | New branch (child) |
+| `Enter` | New idea below (sibling) |
+| `Space` or `E` | Edit |
+| Arrows | Move between ideas |
+| `Alt` + arrows | Reorder, indent, outdent, switch side |
+| `S` | Spark |
+| `1` `2` `3` / `X` | Rate / cut |
+| `P` / `H` | Prune / harvest |
+| `F` / `/` | Jump / search |
+| `Z` | Fold a branch |
+| `⌘Z` / `⌘⇧Z` | Undo / redo |
+| `M` / `Shift+N` | All maps / new map |
+
+While typing in an idea: `Enter` saves and starts the next one, `Tab` goes deeper, `Shift+Tab` goes back up, `Shift+Enter` adds a line break, `Esc` finishes. An idea left empty disappears.
+
+## Your data
+
+Maps live in `localStorage` under keys starting with `ioi:v1:`. That means:
+
+- They stay on one browser on one device. Another browser or another computer starts empty.
+- Clearing site data, or some private-browsing modes, deletes them.
+- Use **Back up all maps** in the maps panel (`M`) or the command palette now and then. Import the JSON to restore.
+
+Each map is saved 250 ms after a change and again when the tab is hidden or closed. Undo history lives in memory and resets on reload.
+
+## Develop
+
+Requires Node 20.19+ or 22.12+.
+
+```bash
+npm install
+```
+
+```bash
+npm run dev
+```
+
+```bash
+npm run build
+```
+
+`npm run build` type-checks with `tsc` and writes a static site to `dist/`. `npm run check` runs only the type check.
+
+There are no runtime dependencies apart from two self-hosted font packages (Instrument Sans and Instrument Serif), so the app makes no network requests after it loads.
+
+## Deploy on Cloudflare Pages (from GitHub)
+
+1. Push this folder to a GitHub repository.
+2. In the Cloudflare dashboard, go to **Workers & Pages**, then **Create**, then the **Pages** tab, then **Connect to Git**, and pick the repository.
+3. Use these build settings:
+   - Framework preset: **None**
+   - Build command: `npm run build`
+   - Build output directory: `dist`
+4. Save and deploy. Every push to your production branch redeploys.
+
+The `.node-version` file pins Node 22.16.0 for the build, which Cloudflare's build image reads. `public/_headers` gives the hashed files in `/assets/` a one-year immutable cache and adds a few basic security headers.
+
+## Project layout
+
+```
+src/
+  main.ts            boot
+  app/               controller, keyboard handling, command registry, undo store
+  model/             map data, copy-on-write operations, storage, templates, Markdown
+  sparks/            provocation deck and random-word lists
+  view/              layout engine, edge geometry, DOM renderer and camera
+  ui/                palette, help, maps, composer, harvest, prune, jump, search, sprint
+  styles/main.css    all styles and both themes
+```
+
+The canvas is plain DOM plus one SVG layer, with no framework. Arrow-key moves take well under a millisecond and an edit keystroke takes about 9 ms on a 600-idea map, so input never waits on rendering. Nodes animate toward their layout positions with exponential smoothing, which lets a new target interrupt an animation already in flight.

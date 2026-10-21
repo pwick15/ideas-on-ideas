@@ -1,0 +1,21 @@
+{
+  "name": "ideas-on-ideas",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A keyboard-first brainstorming canvas. Grow ideas from a center, spark new branches, prune, harvest.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fontsource-variable/instrument-sans": "^5.3.0",
+    "@fontsource/instrument-serif": "^5.3.0"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  }
+}
