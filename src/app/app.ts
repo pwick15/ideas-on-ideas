@@ -8,9 +8,11 @@ import {
   flipSide,
   indent,
   insertForest,
+  makeCenter,
   moveAmongSiblings,
   outdent,
   patchNode,
+  reparent,
   setCut,
   setRating,
   setText,
@@ -31,14 +33,14 @@ import {
   isMapKey,
 } from '../model/storage';
 import { createFromTemplate, exampleMap } from '../model/templates';
-import { HUES, depthOf, hueOf, isCutDeep, subtreeSize, visibleOrder } from '../model/tree';
+import { HUES, depthOf, hueOf, isCutDeep, rootOf, subtreeSize, visibleOrder } from '../model/tree';
 import type { Id, LayoutKind, MapDoc, MapKind, Rating, Settings } from '../model/types';
 import { SparkDeck, type Spark } from '../sparks/deck';
 import { copyText, download, h, slug, type Layer } from '../ui/dom';
 import { Hintbar } from '../ui/hintbar';
 import { Toaster } from '../ui/toast';
 import { Topbar } from '../ui/topbar';
-import { MapView } from '../view/mapview';
+import { MapView, type DropTarget } from '../view/mapview';
 import { buildCommands, type Command } from './commands';
 import { comboOf, isTextInput } from './keys';
 import { Store } from './store';
@@ -104,7 +106,7 @@ export class App {
     this.applyTheme();
 
     this.view = new MapView({
-      nodeClick: (id) => this.onNodeClick(id),
+      nodeClick: (id, e) => this.onNodeClick(id, e),
       nodeDblClick: (id) => this.onNodeDblClick(id),
       canvasClick: () => {
         if (this.editing) this.endEdit('commit');
@@ -116,6 +118,12 @@ export class App {
         if (this.store) this.store.view.cam = { ...this.view.camT };
         this.onCamera?.();
       },
+      dragStart: (id) => {
+        if (this.layers.length) return false;
+        if (this.editing) this.endEdit('commit');
+        return !!this.doc.nodes[id];
+      },
+      drop: (id, target) => this.moveIdea(id, target),
     });
 
     this.live = h('div', { class: 'sr-only', 'aria-live': 'polite' });
@@ -167,7 +175,7 @@ export class App {
     while (this.layers.length) this.popLayer();
     // An idea left empty (page closed mid-edit) is noise; drop it.
     for (const n of Object.values(doc.nodes)) {
-      if (n.parent && !n.text.trim() && !n.children.length && doc.nodes[n.id]) doc = deleteNode(doc, n.id).doc;
+      if (n.parent && !n.text.trim() && !n.children.length && !n.note && doc.nodes[n.id]) doc = deleteNode(doc, n.id).doc;
     }
     this.store = new Store(doc);
     this.store.onSaveFailed = () => this.toast('Could not save. Browser storage may be full or blocked.', 'warn');
@@ -190,7 +198,6 @@ export class App {
       this.pendingFit = true;
     }
     this.view.setFocus(focus);
-    document.title = `${titleOf(doc)} · Ideas on Ideas`;
   }
 
   // ----------------------------------------------------------------- render
@@ -221,6 +228,9 @@ export class App {
     this.store.view.focus = this.focus;
     if (follow && this.focus) this.view.ensureVisible(this.focus, this.settings.follow);
     this.emptyHint.classList.toggle('show', !doc.roots.length);
+    // The first center names the map, and it can change (an edit, Make this the center).
+    const title = `${titleOf(doc)} · Ideas on Ideas`;
+    if (document.title !== title) document.title = title;
     this.topbar.update();
     this.hintbar.update();
   }
@@ -261,6 +271,7 @@ export class App {
     if (n.children.length) bits.push(`${n.children.length} ${n.children.length === 1 ? 'branch' : 'branches'}${n.collapsed ? ', folded' : ''}`);
     if (n.rating) bits.push(`rated ${n.rating}`);
     if (n.cut) bits.push('cut');
+    if (n.note) bits.push('has notes');
     this.live.textContent = bits.join(', ');
   }
 
@@ -361,6 +372,8 @@ export class App {
   private onKey(e: KeyboardEvent) {
     const combo = comboOf(e);
     this.pendingFit = false;
+    // The map view owns the keyboard while an idea is being dragged.
+    if (this.view.dragging) return;
     if (this.editing) {
       if (this.editKey(e, combo)) e.preventDefault();
       return;
@@ -770,6 +783,42 @@ export class App {
     if (!this.commit(next)) this.view.flash(id, 'bump');
   }
 
+  /** Puts an idea inside another, or next to it. Returns false when that is not possible or changes nothing. */
+  moveIdea(id: Id, t: DropTarget): boolean {
+    const doc = this.doc;
+    const target = doc.nodes[t.id];
+    if (!target || !doc.nodes[id]) return false;
+    let next: MapDoc | null;
+    if (t.where === 'into') {
+      next = reparent(doc, id, t.id, undefined, !target.parent && doc.layout === 'balanced' ? t.side : undefined);
+    } else {
+      const list = target.parent ? doc.nodes[target.parent].children : doc.roots;
+      const firstLevel = !!target.parent && !doc.nodes[target.parent].parent;
+      const at = list.indexOf(t.id) + (t.where === 'after' ? 1 : 0);
+      next = reparent(doc, id, target.parent, at, firstLevel ? target.side ?? t.side : undefined);
+    }
+    if (!this.commit(next, id)) return false;
+    this.view.flash(id, 'pulse');
+    return true;
+  }
+
+  /** Swaps the focused idea into the middle of its tree. The old center becomes one of its branches. */
+  makeCenter() {
+    const id = this.focus;
+    if (!id) return;
+    const n = this.doc.nodes[id];
+    if (!n.parent) return this.toast('This is already a center');
+    const old = this.doc.nodes[rootOf(this.doc.nodes, id)];
+    if (!this.commit(makeCenter(this.doc, id), id)) return;
+    this.view.ensureVisible(id, true);
+    this.view.flash(id, 'pulse');
+    const label = (s: string) => (s || 'Untitled').slice(0, 28);
+    this.toast(`“${label(n.text)}” is the center now. “${label(old.text)}” became a branch.`, 'good', {
+      label: 'Undo',
+      run: () => this.undo(),
+    });
+  }
+
   focusRoot(dir: -1 | 0 | 1) {
     if (!this.focus) return this.setFocus(this.doc.roots[0] ?? null);
     let root = this.focus;
@@ -1077,13 +1126,14 @@ export class App {
 
   // ------------------------------------------------------------------ mouse
 
-  private onNodeClick(id: Id) {
+  private onNodeClick(id: Id, e: MouseEvent) {
     const top = this.topLayer();
     if (top?.pick) return top.pick(id);
     if (this.editing?.id === id) return;
     if (this.editing) this.endEdit('commit');
     if (top) return;
     this.setFocus(id, { quiet: true });
+    if ((e.target as HTMLElement).closest('.node-note')) this.runCommand('grow.notes');
   }
 
   private onNodeDblClick(id: Id) {

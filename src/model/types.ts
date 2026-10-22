@@ -29,6 +29,8 @@ export interface IdeaNode {
   collapsed?: boolean;
   /** The spark prompt this idea answered, kept as context. */
   spark?: string;
+  /** Longer writing about the idea, kept with it but off the canvas. */
+  note?: string;
   created: number;
 }
 

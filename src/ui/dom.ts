@@ -138,6 +138,7 @@ export const ICONS: Record<string, string> = {
   layout: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5"/><path d="M14.5 12h3M6.5 12h3M17.5 12c1.5 0 1.5-5 3-5M17.5 12c1.5 0 1.5 5 3 5M6.5 12c-1.5 0-1.5-5-3-5M6.5 12c-1.5 0-1.5 5-3 5"/></svg>',
   harvest: '<svg viewBox="0 0 24 24"><path d="m12 3 2.2 5.6L20 9.3l-4.4 3.9 1.3 5.8L12 16l-4.9 3 1.3-5.8L4 9.3l5.8-.7z"/></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  close: '<svg viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>',
 };
 
 export function icon(name: string): HTMLSpanElement {

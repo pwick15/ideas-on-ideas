@@ -4,6 +4,7 @@ import { edgePath, linkPath } from './geometry';
 import { anchorOf, boxFrom, computeLayout, type Anchor, type Box, type Placement } from './layout';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
+const NOTE_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 5h8M4 8h8M4 11h5"/></svg>';
 const NODE_RATE = 22;
 const CAM_RATE = 13;
 const MIN_Z = 0.15;
@@ -16,8 +17,10 @@ interface NV {
   text: HTMLDivElement;
   stars: HTMLSpanElement;
   fold: HTMLSpanElement;
+  note: HTMLSpanElement;
   sig: string;
   textCache: string | null;
+  noteCache: string | undefined;
   w: number;
   h: number;
   needsMeasure: boolean;
@@ -42,12 +45,25 @@ export interface RenderInput {
   layout: LayoutKind;
 }
 
+export type DropWhere = 'into' | 'before' | 'after';
+
+/** Where a moved idea would land: inside an idea, or next to it as a sibling. */
+export interface DropTarget {
+  id: Id;
+  where: DropWhere;
+  /** Which side of the center to land on, for an idea that ends up on the first level. */
+  side?: Side;
+}
+
 export interface ViewEvents {
   nodeClick(id: Id, e: MouseEvent): void;
   nodeDblClick(id: Id, e: MouseEvent): void;
   canvasClick(e: MouseEvent): void;
   canvasDblClick(e: MouseEvent): void;
   cameraMoved(): void;
+  /** Return false to refuse dragging an idea, for example while a panel is open. */
+  dragStart(id: Id): boolean;
+  drop(id: Id, target: DropTarget): void;
 }
 
 export class MapView {
@@ -70,7 +86,11 @@ export class MapView {
   vw = window.innerWidth;
   vh = window.innerHeight;
 
+  private doc: MapDoc | null = null;
   private focusId: Id | null = null;
+  private marks: { src: Id | null; target: Id | null; cls: string | null } = { src: null, target: null, cls: null };
+  /** True while an idea is being dragged with the pointer. */
+  dragging = false;
   private raf = 0;
   private last = 0;
   private dirtyEdges = new Set<Id>();
@@ -112,6 +132,7 @@ export class MapView {
 
   render(input: RenderInput) {
     const { doc, visible, kids } = input;
+    this.doc = doc;
     if (this.layout !== input.layout) {
       // Side classes depend on the layout, so recompute them all.
       for (const nv of this.nvs.values()) delete nv.el.dataset.sided;
@@ -144,7 +165,7 @@ export class MapView {
       const isEditing = input.editing === id;
       const foldCount = n.collapsed && n.children.length ? subtreeSize(doc.nodes, id) - 1 : 0;
       const dc = 'd' + Math.min(d, 3);
-      const sig = [dc, n.cut ? 1 : 0, inheritedCut ? 1 : 0, n.rating ?? 0, foldCount, h ?? '', isEditing ? 1 : 0].join('|');
+      const sig = [dc, n.cut ? 1 : 0, inheritedCut ? 1 : 0, n.rating ?? 0, foldCount, h ?? '', isEditing ? 1 : 0, n.note ? 1 : 0].join('|');
       if (sig !== nv.sig) {
         const cl = nv.el.classList;
         for (let i = 0; i < 4; i++) cl.toggle('d' + i, 'd' + i === dc);
@@ -154,6 +175,7 @@ export class MapView {
         cl.toggle('folded', !!foldCount);
         cl.toggle('neutral', h === undefined);
         cl.toggle('editing', isEditing);
+        cl.toggle('has-note', !!n.note);
         if (h !== undefined) nv.el.style.setProperty('--hue', String(h));
         else nv.el.style.removeProperty('--hue');
         nv.stars.textContent = n.rating ? '✦'.repeat(n.rating) : '';
@@ -162,6 +184,10 @@ export class MapView {
         if (old[0] !== dc || old[6] !== (isEditing ? '1' : '0')) nv.needsMeasure = true;
         nv.sig = sig;
         nv.el.setAttribute('aria-level', String(d + 1));
+      }
+      if (nv.noteCache !== n.note) {
+        nv.noteCache = n.note;
+        nv.note.title = n.note ? clip(n.note, 280) : '';
       }
       if (n.children.length) nv.el.setAttribute('aria-expanded', String(!n.collapsed));
       else nv.el.removeAttribute('aria-expanded');
@@ -206,12 +232,15 @@ export class MapView {
     stars.className = 'node-stars';
     const fold = document.createElement('span');
     fold.className = 'node-fold';
-    el.append(body, stars, fold);
+    const note = document.createElement('span');
+    note.className = 'node-note';
+    note.innerHTML = NOTE_ICON;
+    el.append(body, stars, fold, note);
     this.nodeLayer.append(el);
     setTimeout(() => el.classList.remove('enter'), 260);
     const nv: NV = {
-      id, el, body, text, stars, fold,
-      sig: '', textCache: null, w: 0, h: 0, needsMeasure: true,
+      id, el, body, text, stars, fold, note,
+      sig: '', textCache: null, noteCache: undefined, w: 0, h: 0, needsMeasure: true,
       ax: 0, ay: 0, tax: 0, tay: 0, anchor: 'c', side: 1, depth: 0, root: id,
       placed: false, dying: 0,
     };
@@ -664,6 +693,69 @@ export class MapView {
     if (na && nb) this.previewPath.setAttribute('d', linkPath(this.box(na), this.box(nb)).d);
   }
 
+  /** Marks an idea being moved (with everything under it) and where it would land. Nulls clear the marks. */
+  setDropMarks(src: Id | null, target: DropTarget | null, valid = true) {
+    if (src !== this.marks.src) {
+      for (const nv of this.nvs.values()) nv.el.classList.remove('drag-src');
+      if (src) for (const id of this.visibleSubtree(src)) this.nvs.get(id)?.el.classList.add('drag-src');
+      this.marks.src = src;
+    }
+    const cls = target ? (valid ? 'drop-' + target.where : 'drop-no') : null;
+    const id = target?.id ?? null;
+    if (id === this.marks.target && cls === this.marks.cls) return;
+    if (this.marks.target && this.marks.cls) this.nvs.get(this.marks.target)?.el.classList.remove(this.marks.cls);
+    if (id && cls) this.nvs.get(id)?.el.classList.add(cls);
+    this.marks.target = id;
+    this.marks.cls = cls;
+  }
+
+  /** True when `id` is `ancestor` or sits somewhere under it. */
+  isWithin(id: Id, ancestor: Id): boolean {
+    for (let cur: Id | null | undefined = id; cur; cur = this.parentOf.get(cur)) if (cur === ancestor) return true;
+    return false;
+  }
+
+  private visibleSubtree(id: Id): Id[] {
+    const out: Id[] = [];
+    const stack = [id];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      out.push(cur);
+      for (const k of this.kidsOf.get(cur) ?? []) stack.push(k);
+    }
+    return out;
+  }
+
+  /**
+   * The idea under a screen point, and where a dragged idea would land on it. The middle of an
+   * idea nests inside it; the edges (and the gaps between siblings) place it before or after.
+   */
+  private dropAt(sx: number, sy: number): DropTarget | null {
+    const pad = 7;
+    let best: NV | null = null;
+    let bestD = Infinity;
+    for (const nv of this.nvs.values()) {
+      if (nv.dying || !nv.placed) continue;
+      const r = this.screenRect(nv.id)!;
+      if (sx < r.x - pad || sx > r.x + r.w + pad || sy < r.y - pad || sy > r.y + r.h + pad) continue;
+      const d = Math.hypot(sx - (r.x + r.w / 2), sy - (r.y + r.h / 2));
+      if (d < bestD) {
+        bestD = d;
+        best = nv;
+      }
+    }
+    if (!best) return null;
+    const r = this.screenRect(best.id)!;
+    const isRoot = !this.parentOf.get(best.id);
+    let where: DropWhere = 'into';
+    if (!isRoot && this.layout !== 'radial') {
+      const f = this.layout === 'down' ? (sx - r.x) / r.w : (sy - r.y) / r.h;
+      where = f < 0.3 ? 'before' : f > 0.7 ? 'after' : 'into';
+    }
+    const side: Side = isRoot ? (sx < r.x + r.w / 2 ? -1 : 1) : best.side;
+    return { id: best.id, where, side };
+  }
+
   flash(id: Id, cls: 'bump' | 'pulse' | 'zap') {
     const el = this.nvs.get(id)?.el;
     if (!el) return;
@@ -679,9 +771,126 @@ export class MapView {
     const pointers = new Map<number, { x: number; y: number }>();
     let drag: { x: number; y: number; moved: boolean } | null = null;
     let pinch: { d: number; z: number } | null = null;
+    // Pressing an idea arms a move. A mouse starts it by moving a few pixels, a finger by holding still.
+    let press: { id: Id; pointerId: number; x: number; y: number; lx: number; ly: number; touch: boolean; timer: number } | null = null;
+    let moving: { id: Id; pointerId: number; ghost: HTMLElement; x: number; y: number; hit: DropTarget | null; raf: number } | null = null;
+    let swallowClick = false;
+
+    const clearPress = () => {
+      if (press) clearTimeout(press.timer);
+      press = null;
+    };
+
+    const track = (x: number, y: number) => {
+      if (!moving) return;
+      moving.x = x;
+      moving.y = y;
+      moving.ghost.style.transform = `translate(${Math.round(x + 14)}px, ${Math.round(y + 12)}px)`;
+      const hit = this.dropAt(x, y);
+      const valid = !!hit && !this.isWithin(hit.id, moving.id);
+      moving.hit = valid ? hit : null;
+      this.setDropMarks(moving.id, hit, valid);
+    };
+
+    // Re-check the target every frame: the camera may pan under a still pointer.
+    const frame = () => {
+      if (!moving) return;
+      const m = 48;
+      const { x, y } = moving;
+      const edge = (v: number, size: number) => Math.max(-m, Math.min(m, v < m ? v - m : v > size - m ? v - (size - m) : 0));
+      const dx = edge(x, this.vw);
+      const dy = edge(y, this.vh);
+      if (dx || dy) {
+        this.camT.x += (dx * 0.3) / this.camT.z;
+        this.camT.y += (dy * 0.3) / this.camT.z;
+        this.cam.x = this.camT.x;
+        this.cam.y = this.camT.y;
+        this.applyCamera();
+      }
+      track(x, y);
+      moving.raf = requestAnimationFrame(frame);
+    };
+
+    const onMoveKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === 'Escape') finishMove(false);
+    };
+
+    const startMove = () => {
+      const p = press;
+      clearPress();
+      const nv = p && this.nvs.get(p.id);
+      if (!p || !nv || nv.dying || !this.events.dragStart(p.id)) return;
+      try {
+        this.el.setPointerCapture(p.pointerId);
+      } catch {
+        /* the pointer is already gone */
+      }
+      const ghost = document.createElement('div');
+      ghost.className = 'drag-ghost';
+      const hue = nv.el.style.getPropertyValue('--hue');
+      if (hue) {
+        ghost.style.setProperty('--hue', hue);
+        ghost.classList.add('tinted');
+      }
+      const label = document.createElement('span');
+      label.textContent = this.doc?.nodes[p.id]?.text || 'Untitled';
+      ghost.append(label);
+      const more = this.doc ? subtreeSize(this.doc.nodes, p.id) - 1 : 0;
+      if (more) {
+        const count = document.createElement('span');
+        count.className = 'drag-more';
+        count.textContent = '+' + more;
+        ghost.append(count);
+      }
+      document.body.append(ghost);
+      document.body.classList.add('moving-idea');
+      moving = { id: p.id, pointerId: p.pointerId, ghost, x: p.lx, y: p.ly, hit: null, raf: 0 };
+      this.dragging = true;
+      window.addEventListener('keydown', onMoveKey, true);
+      track(p.lx, p.ly);
+      moving.raf = requestAnimationFrame(frame);
+    };
+
+    const finishMove = (drop: boolean) => {
+      const m = moving;
+      if (!m) return;
+      moving = null;
+      this.dragging = false;
+      cancelAnimationFrame(m.raf);
+      window.removeEventListener('keydown', onMoveKey, true);
+      m.ghost.remove();
+      document.body.classList.remove('moving-idea');
+      this.setDropMarks(null, null);
+      // The browser still sends a click for this press; it is not one.
+      swallowClick = true;
+      setTimeout(() => (swallowClick = false), 0);
+      if (drop && m.hit) this.events.drop(m.id, m.hit);
+    };
+
+    // Catches releases outside the viewport (the canvas handles its own first).
+    window.addEventListener('pointerup', (e) => {
+      if (press?.pointerId === e.pointerId) clearPress();
+      if (moving?.pointerId === e.pointerId) finishMove(true);
+    });
+    window.addEventListener('blur', () => {
+      clearPress();
+      finishMove(false);
+    });
 
     this.el.addEventListener('pointerdown', (e) => {
-      if ((e.target as HTMLElement).closest('.node')) return;
+      const target = e.target as HTMLElement;
+      const nodeEl = target.closest<HTMLElement>('.node');
+      if (nodeEl) {
+        if (press || moving || pointers.size || e.button !== 0) return;
+        if (nodeEl.classList.contains('exit') || nodeEl.classList.contains('editing') || target.closest('[contenteditable]')) return;
+        const touch = e.pointerType === 'touch';
+        press = { id: nodeEl.dataset.id!, pointerId: e.pointerId, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, touch, timer: 0 };
+        if (touch) press.timer = window.setTimeout(startMove, 420);
+        return;
+      }
+      clearPress();
       if (e.button !== 0 && e.pointerType === 'mouse') return;
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       this.el.setPointerCapture(e.pointerId);
@@ -693,6 +902,22 @@ export class MapView {
       }
     });
     this.el.addEventListener('pointermove', (e) => {
+      if (moving?.pointerId === e.pointerId) {
+        // The button came up somewhere we never heard about (another window, say).
+        if (e.pointerType === 'mouse' && !(e.buttons & 1)) finishMove(false);
+        else track(e.clientX, e.clientY);
+        return;
+      }
+      if (press?.pointerId === e.pointerId) {
+        press.lx = e.clientX;
+        press.ly = e.clientY;
+        const dist = Math.abs(e.clientX - press.x) + Math.abs(e.clientY - press.y);
+        if (press.touch) {
+          if (dist > 10) clearPress();
+        } else if (!(e.buttons & 1)) clearPress();
+        else if (dist > 5) startMove();
+        return;
+      }
       if (!pointers.has(e.pointerId)) return;
       const prev = pointers.get(e.pointerId)!;
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -720,6 +945,11 @@ export class MapView {
       }
     });
     const end = (e: PointerEvent) => {
+      if (moving?.pointerId === e.pointerId) {
+        track(e.clientX, e.clientY);
+        finishMove(e.type === 'pointerup');
+        return;
+      }
       if (!pointers.has(e.pointerId)) return;
       pointers.delete(e.pointerId);
       if (pointers.size < 2) pinch = null;
@@ -729,12 +959,17 @@ export class MapView {
     };
     this.el.addEventListener('pointerup', end);
     this.el.addEventListener('pointercancel', end);
+    this.el.addEventListener('lostpointercapture', (e) => {
+      if (moving?.pointerId === e.pointerId) finishMove(false);
+    });
 
     this.el.addEventListener('click', (e) => {
+      if (swallowClick) return;
       const node = (e.target as HTMLElement).closest<HTMLElement>('.node');
       if (node?.dataset.id && !node.classList.contains('exit')) this.events.nodeClick(node.dataset.id, e);
     });
     this.el.addEventListener('dblclick', (e) => {
+      if (swallowClick) return;
       const node = (e.target as HTMLElement).closest<HTMLElement>('.node');
       if (node?.dataset.id) this.events.nodeDblClick(node.dataset.id, e);
       else this.events.canvasDblClick(e);
@@ -762,4 +997,8 @@ export class MapView {
 
 function clampZ(z: number) {
   return Math.min(MAX_Z, Math.max(MIN_Z, z));
+}
+
+function clip(s: string, max: number) {
+  return s.length > max ? s.slice(0, max - 1).trimEnd() + '…' : s;
 }

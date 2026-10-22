@@ -11,13 +11,22 @@ function decorate(text: string, rating?: Rating, cut?: boolean): string {
   return out;
 }
 
+/** A note as quote lines, indented so Markdown keeps it inside the list item above. */
+function noteLines(note: string | undefined, indent: string): string[] {
+  if (!note?.trim()) return [];
+  return note
+    .trim()
+    .split('\n')
+    .map((l) => (indent + '> ' + l).trimEnd());
+}
+
 /** The whole map as a nested Markdown outline. Each center becomes a heading. */
 export function mapToMarkdown(doc: MapDoc, includeCut = true): string {
   const lines: string[] = [];
   const walk = (id: Id, depth: number) => {
     const n = doc.nodes[id];
     if (!includeCut && n.cut) return;
-    lines.push('  '.repeat(depth) + '- ' + decorate(n.text, n.rating, n.cut));
+    lines.push('  '.repeat(depth) + '- ' + decorate(n.text, n.rating, n.cut), ...noteLines(n.note, '  '.repeat(depth + 1)));
     for (const c of n.children) walk(c, depth + 1);
   };
   for (const r of doc.roots) {
@@ -25,6 +34,8 @@ export function mapToMarkdown(doc: MapDoc, includeCut = true): string {
     if (lines.length) lines.push('');
     lines.push('# ' + decorate(root.text, root.rating));
     lines.push('');
+    const note = noteLines(root.note, '');
+    if (note.length) lines.push(...note, '');
     for (const c of root.children) walk(c, 0);
   }
   if (doc.links.length) {
@@ -42,7 +53,7 @@ export function subtreeToMarkdown(doc: MapDoc, id: Id): string {
   const lines: string[] = [];
   const walk = (nid: Id, depth: number) => {
     const n = doc.nodes[nid];
-    lines.push('  '.repeat(depth) + '- ' + decorate(n.text, n.rating, n.cut));
+    lines.push('  '.repeat(depth) + '- ' + decorate(n.text, n.rating, n.cut), ...noteLines(n.note, '  '.repeat(depth + 1)));
     for (const c of n.children) walk(c, depth + 1);
   };
   walk(id, 0);
@@ -54,6 +65,7 @@ export interface HarvestItem {
   text: string;
   rating: Rating;
   path: string[];
+  note?: string;
 }
 
 export function harvestItems(doc: MapDoc): HarvestItem[] {
@@ -61,7 +73,7 @@ export function harvestItems(doc: MapDoc): HarvestItem[] {
   const walk = (id: Id, underCut: boolean) => {
     const n = doc.nodes[id];
     const cut = underCut || !!n.cut;
-    if (n.rating && !cut) items.push({ id, text: n.text, rating: n.rating, path: pathText(doc.nodes, id) });
+    if (n.rating && !cut) items.push({ id, text: n.text, rating: n.rating, path: pathText(doc.nodes, id), note: n.note });
     for (const c of n.children) walk(c, cut);
   };
   for (const r of doc.roots) walk(r, false);
@@ -78,7 +90,7 @@ export function harvestToMarkdown(doc: MapDoc, title: string): string {
     lines.push(`## ${STAR.repeat(tier)}`, '');
     for (const i of group) {
       const ctx = i.path.length > 1 ? ` (${i.path.slice(1).join(' > ')})` : '';
-      lines.push(`- ${i.text.replace(/\n+/g, ' ')}${ctx}`);
+      lines.push(`- ${i.text.replace(/\n+/g, ' ')}${ctx}`, ...noteLines(i.note, '  '));
     }
     lines.push('');
   }
@@ -87,7 +99,7 @@ export function harvestToMarkdown(doc: MapDoc, title: string): string {
 
 /**
  * Parses pasted text into an outline. Understands indentation, Markdown bullets,
- * numbered lists, headings, and the ✦ / ~~strike~~ markers this app exports.
+ * numbered lists, headings, and the ✦ / ~~strike~~ / > note markers this app exports.
  */
 export function parseOutline(text: string): ForestNode[] {
   const rawLines = text.replace(/\r\n?/g, '\n').split('\n');
@@ -98,6 +110,14 @@ export function parseOutline(text: string): ForestNode[] {
     const expanded = raw.replace(/\t/g, '    ');
     const indent = expanded.length - expanded.trimStart().length;
     let body = expanded.trim();
+    // A quote line is part of the note on the idea above it.
+    const quote = /^>\s?(.*)$/.exec(body);
+    if (quote && items.length) {
+      const last = items[items.length - 1].node;
+      last.note = last.note === undefined ? quote[1] : last.note + '\n' + quote[1];
+      continue;
+    }
+    if (quote) body = quote[1].trim();
     let depth: number;
     const heading = /^(#{1,6})\s+(.*)$/.exec(body);
     if (heading) {
@@ -126,6 +146,7 @@ export function parseOutline(text: string): ForestNode[] {
     items.push({ depth, node: { text: body, rating, cut: cut || undefined, children: [] } });
   }
   if (!items.length) return [];
+  for (const { node } of items) if (node.note !== undefined) node.note = node.note.trim() || undefined;
   // Normalise so the shallowest line is depth 0.
   const min = Math.min(...items.map((i) => i.depth));
   const forest: ForestNode[] = [];

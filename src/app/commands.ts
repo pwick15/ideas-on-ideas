@@ -4,6 +4,8 @@ import { Help } from '../ui/help';
 import { JumpHints } from '../ui/jump';
 import { LinkMode } from '../ui/linkmode';
 import { MapsPanel } from '../ui/maps';
+import { MoveMode } from '../ui/movemode';
+import { NotesPanel } from '../ui/notes';
 import { Palette } from '../ui/palette';
 import { Prune } from '../ui/prune';
 import { Search } from '../ui/search';
@@ -50,6 +52,15 @@ export function buildCommands(app: App): Command[] {
     { id: 'grow.parent', title: 'Wrap in a new parent', group: 'Grow', keys: ['shift+tab'], run: () => app.create('parent'), when: hasFocus, hint: 'Groups an idea under a new heading.' },
     { id: 'grow.root', title: 'New center', group: 'Grow', keys: ['n'], run: () => app.create('root'), hint: 'Start another central idea on the same map.' },
     { id: 'grow.edit', title: 'Edit idea', group: 'Grow', keys: ['space', 'e', 'f2'], run: () => app.edit(), when: hasFocus },
+    {
+      id: 'grow.notes',
+      title: 'Notes for this idea',
+      group: 'Grow',
+      keys: ['o'],
+      run: () => app.pushLayer(new NotesPanel(app, app.focus!)),
+      when: hasFocus,
+      hint: 'A scratch pad attached to the idea, for writing more than fits on the map.',
+    },
     { id: 'grow.paste', title: 'Paste a list as ideas', group: 'Grow', keys: ['mod+v'], run: () => app.requestPaste(), native: true, hint: 'Indented lists keep their structure.' },
 
     // Shape
@@ -58,6 +69,24 @@ export function buildCommands(app: App): Command[] {
     { id: 'shape.moveDown', title: 'Move idea down', group: 'Shape', keys: ['alt+arrowdown'], run: () => app.moveNode('down'), when: hasFocus, repeat: true, hidden: true },
     { id: 'shape.moveLeft', title: 'Move idea left', group: 'Shape', keys: ['alt+arrowleft'], run: () => app.moveNode('left'), when: hasFocus, repeat: true, hidden: true },
     { id: 'shape.moveRight', title: 'Move idea right', group: 'Shape', keys: ['alt+arrowright'], run: () => app.moveNode('right'), when: hasFocus, repeat: true, hidden: true },
+    {
+      id: 'shape.moveTo',
+      title: 'Move idea to…',
+      group: 'Shape',
+      keys: ['g'],
+      run: () => app.pushLayer(new MoveMode(app)),
+      when: hasFocus,
+      hint: 'Pick another idea and this one goes inside it. Dragging with the mouse works too.',
+    },
+    {
+      id: 'shape.center',
+      title: 'Make this the center',
+      group: 'Shape',
+      keys: ['shift+c'],
+      run: () => app.makeCenter(),
+      when: hasFocus,
+      hint: 'The old center becomes one of its branches.',
+    },
     { id: 'shape.fold', title: 'Fold or unfold branches', group: 'Shape', keys: ['z'], run: () => app.toggleFold(), when: hasFocus },
     { id: 'shape.unfoldAll', title: 'Unfold everything', group: 'Shape', keys: ['shift+z'], run: () => app.unfoldAll() },
     { id: 'shape.color', title: 'Change branch colour', group: 'Shape', keys: ['c'], run: () => app.cycleHue(), when: hasFocus },

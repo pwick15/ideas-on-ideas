@@ -37,7 +37,14 @@ export class Search implements Layer {
     }
     // Search everything, including folded and cut ideas.
     const all = visibleOrder({ ...doc, nodes: Object.fromEntries(Object.entries(doc.nodes).map(([k, n]) => [k, { ...n, collapsed: false }])) }, false);
-    const scored = all.map((id) => ({ id, s: fuzzy(q, doc.nodes[id].text) })).filter((x) => x.s >= (q.length > 2 ? 30 : 0));
+    const needle = q.trim().toLowerCase();
+    const score = (id: Id) => {
+      const n = doc.nodes[id];
+      const s = fuzzy(q, n.text);
+      // A hit in the notes counts, but ranks below a hit in the idea itself.
+      return needle.length > 1 && n.note?.toLowerCase().includes(needle) ? Math.max(s, 60) : s;
+    };
+    const scored = all.map((id) => ({ id, s: score(id) })).filter((x) => x.s >= (q.length > 2 ? 30 : 0));
     // Keep map order for stepping, but start at the best match.
     this.matches = scored.map((x) => x.id);
     const best = scored.reduce((b, x) => (x.s > b.s ? x : b), scored[0] ?? { id: '', s: -1 });

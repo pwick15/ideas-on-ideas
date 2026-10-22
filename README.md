@@ -25,10 +25,13 @@ Sources: [Diehl and Stroebe, via SE University PDF](https://homepages.se.edu/cvo
 
 - **Map kinds.** Brainstorm, Video, Short, Article, Software, Starburst (who/what/when/where/why/how) and SCAMPER. Each one seeds a few starter branches and weights the spark deck toward that kind of work. A short-form map asks about the first 1.5 seconds and loops; a software map asks who the first user is and what to cut.
 - **More than one center.** `N` adds another central idea on the same map. `L` draws a dotted bridge between any two ideas, across branches or centers.
+- **Move ideas around.** Drag an idea onto another to nest it there, or onto the top or bottom edge of one to place it before or after. On a touch screen, hold the idea first. From the keyboard, `G` picks a new home with the arrows or jump letters: `Enter` puts it inside, `Shift+Enter` puts it after. `Alt` + arrows still nudge an idea one step at a time.
+- **Make this the center.** `Shift+C` turns the focused idea into the center of its tree. The old center becomes one of its branches, so nothing is deleted. Useful when you branched off one topic and then grew everything under it.
+- **Notes.** `O` opens a scratch pad beside the map for the focused idea, for anything longer than a label. Notes save as you type and stay with the idea when it moves. Ideas with notes show a small mark (click it to open them), search looks inside notes, and the harvest shows them.
 - **Four layouts.** `V` cycles mind map (balanced left and right), tree, top-down and radial, with animated transitions.
 - **Jump anywhere.** `F` puts a letter on every visible idea; type it to fly there. `/` searches every idea, including folded ones.
 - **Command palette.** `⌘K` (Ctrl+K on Windows and Linux) finds every action and every map.
-- **Paste lists.** Paste an indented or bulleted list and it becomes a branch. Markdown exported from the app pastes back with ratings and cuts intact.
+- **Paste lists.** Paste an indented or bulleted list and it becomes a branch. Markdown exported from the app pastes back with ratings, cuts and notes intact (notes are the `>` quote lines under an idea).
 - **Export.** Copy a branch, the map or the harvest as Markdown. Download a JSON backup of every map and import it again elsewhere.
 - **Light and dark themes**, following the system by default (`Shift+T` switches).
 - **Touch.** Phones and tablets get a small toolbar, pinch to zoom and drag to pan. It is built for a keyboard first, though.
@@ -42,8 +45,11 @@ Sources: [Diehl and Stroebe, via SE University PDF](https://homepages.se.edu/cvo
 | `Tab` | New branch (child) |
 | `Enter` | New idea below (sibling) |
 | `Space` or `E` | Edit |
+| `O` | Notes for the idea |
 | Arrows | Move between ideas |
+| `G` | Move the idea somewhere else (or drag it) |
 | `Alt` + arrows | Reorder, indent, outdent, switch side |
+| `Shift+C` | Make the idea the center |
 | `S` | Spark |
 | `1` `2` `3` / `X` | Rate / cut |
 | `P` / `H` | Prune / harvest |

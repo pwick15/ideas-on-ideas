@@ -16,7 +16,11 @@ const GROUPS: { group: Group; title: string; extra?: [string, string][] }[] = [
   {
     group: 'Shape',
     title: 'Shape',
-    extra: [['alt+arrowup alt+arrowdown', 'Reorder'], ['alt+arrowleft alt+arrowright', 'Indent, outdent, switch side']],
+    extra: [
+      ['g', 'Move idea to… (or drag it)'],
+      ['alt+arrowup alt+arrowdown', 'Reorder'],
+      ['alt+arrowleft alt+arrowright', 'Indent, outdent, switch side'],
+    ],
   },
   { group: 'Spark', title: 'Get unstuck' },
   { group: 'Judge', title: 'Judge (later)' },

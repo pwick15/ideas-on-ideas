@@ -29,8 +29,8 @@ export class Hintbar {
     } else {
       const n = app.focus ? app.doc.nodes[app.focus] : null;
       hints = n && !n.parent
-        ? [['tab', 'branch out'], ['s', 'spark'], ['n', 'new center'], ['t', 'sprint'], ['p', 'prune'], ['v', 'layout'], ['mod+k', 'commands'], ['?', 'all keys']]
-        : [['tab', 'branch'], ['enter', 'sibling'], ['space', 'edit'], ['s', 'spark'], ['1 2 3', 'rate'], ['x', 'cut'], ['f', 'jump'], ['mod+k', 'commands'], ['?', 'all keys']];
+        ? [['tab', 'branch out'], ['o', 'notes'], ['s', 'spark'], ['n', 'new center'], ['t', 'sprint'], ['p', 'prune'], ['v', 'layout'], ['mod+k', 'commands'], ['?', 'all keys']]
+        : [['tab', 'branch'], ['enter', 'sibling'], ['space', 'edit'], ['o', 'notes'], ['g', 'move'], ['s', 'spark'], ['1 2 3', 'rate'], ['x', 'cut'], ['f', 'jump'], ['mod+k', 'commands'], ['?', 'all keys']];
     }
     if (!hints || (!app.settings.hints && !app.editing && !top)) {
       this.el.classList.toggle('hidden', !hints);

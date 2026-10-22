@@ -171,6 +171,7 @@ kbd + kbd {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
   cursor: default;
   outline: none;
 }
@@ -535,6 +536,49 @@ kbd + kbd {
   display: none;
 }
 
+/* Ideas with notes carry a small page mark. Clicking it opens the notes. */
+.node-note {
+  position: absolute;
+  right: -7px;
+  bottom: -8px;
+  display: none;
+  place-items: center;
+  width: 20px;
+  height: 17px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in oklch, var(--branch) 55%, transparent);
+  background: var(--bg);
+  color: var(--branch);
+  transition: background-color 0.12s;
+}
+
+.node.has-note .node-note {
+  display: grid;
+}
+
+.node.left .node-note {
+  right: auto;
+  left: -7px;
+}
+
+.node-note svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.node-note:hover {
+  background: color-mix(in oklch, var(--branch) 20%, var(--bg));
+}
+
+.node.cut .node-note,
+.node.cut-deep .node-note {
+  opacity: 0.4;
+}
+
 /* Motion */
 .node.enter .node-body {
   animation: pop 0.28s var(--spring);
@@ -566,7 +610,8 @@ kbd + kbd {
 }
 
 .viewport.spotlit .node:not(.lit) .node-stars,
-.viewport.spotlit .node:not(.lit) .node-fold {
+.viewport.spotlit .node:not(.lit) .node-fold,
+.viewport.spotlit .node:not(.lit) .node-note {
   opacity: 0.2;
 }
 
@@ -591,6 +636,113 @@ kbd + kbd {
 .node.link-dst .node-body {
   outline: 2px dashed var(--gold);
   outline-offset: 4px;
+}
+
+/* Moving ideas: the idea in hand fades, the landing spot lights up. */
+.node.drag-src {
+  opacity: 0.3;
+}
+
+.viewport .node.drop-into .node-body {
+  box-shadow:
+    0 0 0 2px var(--gold),
+    0 0 0 7px var(--gold-soft);
+}
+
+.viewport .node.drop-into.d0 .node-body {
+  box-shadow:
+    0 0 0 3px var(--bg),
+    0 0 0 5px var(--gold),
+    0 0 0 11px var(--gold-soft);
+}
+
+.viewport .node.drop-no .node-body {
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--danger) 75%, transparent);
+}
+
+.node.drop-before::before,
+.node.drop-after::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--gold);
+  box-shadow: 0 0 10px var(--gold-soft);
+  pointer-events: none;
+}
+
+.node.drop-before::before {
+  top: -7px;
+}
+
+.node.drop-after::after {
+  bottom: -7px;
+}
+
+.viewport[data-layout='down'] .node.drop-before::before,
+.viewport[data-layout='down'] .node.drop-after::after {
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  height: auto;
+}
+
+.viewport[data-layout='down'] .node.drop-before::before {
+  left: -9px;
+  right: auto;
+}
+
+.viewport[data-layout='down'] .node.drop-after::after {
+  left: auto;
+  right: -9px;
+}
+
+.drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 260px;
+  padding: 6px 11px 7px 13px;
+  border-radius: 10px;
+  background: var(--surface-solid);
+  border: 1px solid var(--line-2);
+  box-shadow:
+    inset 3px 0 0 var(--stripe, var(--text-3)),
+    var(--shadow);
+  font: 500 14px/1.3 var(--font-ui);
+  color: var(--text);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.drag-ghost.tinted {
+  --stripe: oklch(var(--b-l) var(--b-c) var(--hue));
+}
+
+.drag-ghost span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drag-more {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+body.moving-idea,
+body.moving-idea * {
+  cursor: grabbing !important;
 }
 
 /* Spark prompt, attached above the idea being answered */
@@ -1408,6 +1560,17 @@ kbd + kbd {
   white-space: pre-wrap;
 }
 
+.hi-note {
+  display: -webkit-box;
+  margin-top: 4px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
 .hi-path {
   margin-top: 3px;
   font-size: 11.5px;
@@ -1419,6 +1582,56 @@ kbd + kbd {
   gap: 8px;
   padding: 10px 16px;
   border-top: 1px solid var(--line);
+}
+
+/* Notes drawer */
+.drawer.notes {
+  width: min(460px, calc(100vw - 24px));
+}
+
+.notes-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 18px 12px 8px 22px;
+}
+
+.notes-heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.notes-path {
+  margin-bottom: 5px;
+  font-size: 11.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notes-title {
+  margin: 0;
+  font: 400 26px/1.15 var(--font-display);
+  overflow-wrap: anywhere;
+}
+
+.notes-input {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  resize: none;
+  padding: 8px 22px 20px;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--text);
+  font: 400 15px/1.65 var(--font-ui);
+  scrollbar-width: thin;
+}
+
+.notes-input::placeholder {
+  color: var(--text-3);
 }
 
 /* HUDs in the top slot */
@@ -1523,11 +1736,16 @@ kbd + kbd {
   animation: pulse 0.32s var(--spring);
 }
 
-.link-hud .hud-text {
+.link-hud .hud-text,
+.move-hud .hud-text {
   max-width: 50vw;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.move-dest {
+  color: var(--gold);
 }
 
 .searchbar {
@@ -1660,6 +1878,11 @@ kbd + kbd {
 
   .toasts {
     bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+
+  /* iOS zooms into text fields smaller than 16px. */
+  .notes-input {
+    font-size: 16px;
   }
 }
 

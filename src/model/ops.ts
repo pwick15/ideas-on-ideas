@@ -1,4 +1,4 @@
-import { depthOf, isAncestor, pickHue, subtreeIds, subtreeSize } from './tree';
+import { ancestors, depthOf, isAncestor, pickHue, subtreeIds, subtreeSize } from './tree';
 import type { Id, IdeaNode, Link, MapDoc, MapKind, Rating, Side } from './types';
 
 export function uid(): Id {
@@ -82,10 +82,11 @@ function attach(tx: Tx, id: Id, parent: Id | null, index: number) {
 }
 
 /** Picks the lighter side of a center for a new first-level branch. */
-function lighterSide(tx: Tx, rootId: Id): Side {
+function lighterSide(tx: Tx, rootId: Id, skip?: Id): Side {
   let right = 0;
   let left = 0;
   for (const c of tx.get(rootId).children) {
+    if (c === skip) continue;
     const w = subtreeSize(tx.nodes, c);
     if ((tx.get(c).side ?? 1) === 1) right += w;
     else left += w;
@@ -103,7 +104,7 @@ function normalizeBranch(tx: Tx, id: Id, preferSide?: Side) {
       const sibs = tx.get(n.parent!).children.filter((c) => c !== id);
       m.hue = pickHue(sibs.map((c) => tx.get(c).hue));
     }
-    if (m.side === undefined) m.side = preferSide ?? lighterSide(tx, n.parent!);
+    if (m.side === undefined) m.side = preferSide ?? lighterSide(tx, n.parent!, id);
   } else if (n.hue !== undefined || n.side !== undefined) {
     const m = tx.mut(id);
     delete m.hue;
@@ -278,13 +279,23 @@ export function wrapInParent(doc: MapDoc, id: Id): { doc: MapDoc; id: Id } | nul
   return { doc: tx.done(), id: wrapper.id };
 }
 
-/** Move a node (and its subtree) under a new parent. */
-export function reparent(doc: MapDoc, id: Id, newParent: Id | null, index?: number): MapDoc | null {
+/**
+ * Move a node (and its subtree) under a new parent, or out to be a center when the parent is null.
+ * `index` is a position in the target list as it is before the move, and defaults to the end.
+ * `side` puts a new first-level branch on that side of its center. Returns null when nothing would change.
+ */
+export function reparent(doc: MapDoc, id: Id, newParent: Id | null, index?: number, side?: Side): MapDoc | null {
   if (newParent && (newParent === id || isAncestor(doc.nodes, id, newParent))) return null;
+  const n = doc.nodes[id];
+  const list = newParent ? doc.nodes[newParent].children : doc.roots;
+  const from = list.indexOf(id);
+  let at = index ?? list.length;
+  // Taking the node out first shifts everything after it in the same list.
+  if (from >= 0 && from < at) at--;
+  if (from === at && (side === undefined || side === n.side)) return null;
   const tx = new Tx(doc);
   detach(tx, id);
-  const len = newParent ? tx.get(newParent).children.length : tx.roots.length;
-  attach(tx, id, newParent, index ?? len);
+  attach(tx, id, newParent, at);
   if (newParent) {
     const np = tx.mut(newParent);
     if (np.collapsed) np.collapsed = false;
@@ -292,8 +303,64 @@ export function reparent(doc: MapDoc, id: Id, newParent: Id | null, index?: numb
   const m = tx.mut(id);
   delete m.side;
   if (depthOf(tx.nodes, id) !== 1) delete m.hue;
-  for (const d of subtreeIds(tx.nodes, id)) normalizeBranch(tx, d);
+  for (const d of subtreeIds(tx.nodes, id)) normalizeBranch(tx, d, d === id ? side : undefined);
   return tx.done();
+}
+
+/**
+ * Make a node the center of its tree. The path back to the old center flips direction,
+ * so the old center (and anything in between) becomes a branch. Nothing is deleted.
+ */
+export function makeCenter(doc: MapDoc, id: Id): MapDoc | null {
+  if (!doc.nodes[id]?.parent) return null;
+  const path = [id, ...ancestors(doc.nodes, id)];
+  const tx = new Tx(doc);
+  // Each parent on the path becomes the last child of the idea that was below it.
+  for (let i = 0; i < path.length - 1; i++) {
+    const below = tx.mut(path[i]);
+    const above = tx.mut(path[i + 1]);
+    above.children.splice(above.children.indexOf(below.id), 1);
+    below.children.push(above.id);
+    above.parent = below.id;
+  }
+  tx.roots[tx.roots.indexOf(path[path.length - 1])] = id;
+  const center = tx.mut(id);
+  center.parent = null;
+  delete center.collapsed;
+  // A cut center would fade its whole tree.
+  delete center.cut;
+  restyle(tx, id);
+  return tx.done();
+}
+
+/** After a tree changes shape: the center is neutral, first-level branches get a hue and a side, deeper ideas inherit both. */
+function restyle(tx: Tx, rootId: Id) {
+  const strip = (id: Id) => {
+    const n = tx.get(id);
+    if (n.hue === undefined && n.side === undefined) return;
+    const m = tx.mut(id);
+    delete m.hue;
+    delete m.side;
+  };
+  strip(rootId);
+  const kids = tx.get(rootId).children;
+  const used = kids.map((k) => tx.get(k).hue);
+  for (const k of kids) {
+    if (tx.get(k).hue !== undefined) continue;
+    const hue = pickHue(used);
+    tx.mut(k).hue = hue;
+    used.push(hue);
+  }
+  // Split the branches into two columns of similar size, keeping their order.
+  const weights = kids.map((k) => subtreeSize(tx.nodes, k));
+  const total = weights.reduce((a, b) => a + b, 0);
+  let acc = 0;
+  kids.forEach((k, i) => {
+    const side: Side = acc + weights[i] / 2 <= total / 2 ? 1 : -1;
+    acc += weights[i];
+    if (tx.get(k).side !== side) tx.mut(k).side = side;
+    for (const d of subtreeIds(tx.nodes, k)) if (d !== k) strip(d);
+  });
 }
 
 export function toggleLink(doc: MapDoc, a: Id, b: Id): { doc: MapDoc; added: boolean } {
@@ -308,6 +375,7 @@ export interface ForestNode {
   text: string;
   rating?: Rating;
   cut?: boolean;
+  note?: string;
   children: ForestNode[];
 }
 
@@ -320,9 +388,10 @@ export function insertForest(doc: MapDoc, parentId: Id | null, forest: ForestNod
     const extra: Partial<IdeaNode> = {};
     if (f.rating) extra.rating = f.rating;
     if (f.cut) extra.cut = true;
+    if (f.note) extra.note = f.note;
     const r = pid ? addChild(d, pid, f.text, extra, i) : addRoot(d, f.text, i);
     d = r.doc;
-    if (!pid && (f.rating || f.cut)) d = patchNode(d, r.id, extra);
+    if (!pid && Object.keys(extra).length) d = patchNode(d, r.id, extra);
     for (const c of f.children) put(r.id, c);
     return r.id;
   };
@@ -339,6 +408,7 @@ export function toForest(doc: MapDoc, id: Id): ForestNode {
     text: n.text,
     rating: n.rating,
     cut: n.cut,
+    note: n.note,
     children: n.children.map((c) => toForest(doc, c)),
   };
 }

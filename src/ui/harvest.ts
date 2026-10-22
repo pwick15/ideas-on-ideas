@@ -75,6 +75,7 @@ export class Harvest implements Layer {
         'div',
         { class: 'harvest-item', 'data-i': i },
         h('div', 'hi-text', it.text || 'Untitled'),
+        it.note ? h('div', 'hi-note', it.note) : null,
         h('div', 'hi-path', it.path.join(' › ')),
       );
       frag.append(row);
