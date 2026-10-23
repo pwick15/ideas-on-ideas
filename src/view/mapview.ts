@@ -165,7 +165,7 @@ export class MapView {
       const isEditing = input.editing === id;
       const foldCount = n.collapsed && n.children.length ? subtreeSize(doc.nodes, id) - 1 : 0;
       const dc = 'd' + Math.min(d, 3);
-      const sig = [dc, n.cut ? 1 : 0, inheritedCut ? 1 : 0, n.rating ?? 0, foldCount, h ?? '', isEditing ? 1 : 0, n.note ? 1 : 0].join('|');
+      const sig = [dc, n.cut ? 1 : 0, inheritedCut ? 1 : 0, n.rating ?? 0, foldCount, h ?? '', isEditing ? 1 : 0, n.note ? 1 : 0, n.wide ? 1 : 0].join('|');
       if (sig !== nv.sig) {
         const cl = nv.el.classList;
         for (let i = 0; i < 4; i++) cl.toggle('d' + i, 'd' + i === dc);
@@ -176,12 +176,13 @@ export class MapView {
         cl.toggle('neutral', h === undefined);
         cl.toggle('editing', isEditing);
         cl.toggle('has-note', !!n.note);
+        cl.toggle('wide', !!n.wide);
         if (h !== undefined) nv.el.style.setProperty('--hue', String(h));
         else nv.el.style.removeProperty('--hue');
         nv.stars.textContent = n.rating ? '✦'.repeat(n.rating) : '';
         nv.fold.textContent = foldCount ? '+' + foldCount : '';
         const old = nv.sig.split('|');
-        if (old[0] !== dc || old[6] !== (isEditing ? '1' : '0')) nv.needsMeasure = true;
+        if (old[0] !== dc || old[6] !== (isEditing ? '1' : '0') || old[8] !== (n.wide ? '1' : '0')) nv.needsMeasure = true;
         nv.sig = sig;
         nv.el.setAttribute('aria-level', String(d + 1));
       }

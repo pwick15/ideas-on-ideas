@@ -88,6 +88,7 @@ export function buildCommands(app: App): Command[] {
       hint: 'The old center becomes one of its branches.',
     },
     { id: 'shape.fold', title: 'Fold or unfold branches', group: 'Shape', keys: ['z'], run: () => app.toggleFold(), when: hasFocus },
+    { id: 'shape.wide', title: 'Wrap or unwrap text', group: 'Shape', keys: ['w'], run: () => app.toggleWide(), when: hasFocus, hint: 'Long text and links run on one line.' },
     { id: 'shape.unfoldAll', title: 'Unfold everything', group: 'Shape', keys: ['shift+z'], run: () => app.unfoldAll() },
     { id: 'shape.color', title: 'Change branch colour', group: 'Shape', keys: ['c'], run: () => app.cycleHue(), when: hasFocus },
     { id: 'shape.link', title: 'Bridge to another idea', group: 'Shape', keys: ['l'], run: () => app.pushLayer(new LinkMode(app)), when: hasFocus, hint: 'Connect ideas across branches or centers.' },

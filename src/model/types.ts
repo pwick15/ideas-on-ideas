@@ -27,6 +27,8 @@ export interface IdeaNode {
   rating?: Rating;
   cut?: boolean;
   collapsed?: boolean;
+  /** Lets the text run as wide as it needs instead of wrapping. */
+  wide?: boolean;
   /** The spark prompt this idea answered, kept as context. */
   spark?: string;
   /** Longer writing about the idea, kept with it but off the canvas. */

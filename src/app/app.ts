@@ -880,6 +880,12 @@ export class App {
     this.commit(patchNode(this.doc, id, { collapsed: n.collapsed ? undefined : true }));
   }
 
+  toggleWide() {
+    const id = this.focus;
+    if (!id) return;
+    this.commit(patchNode(this.doc, id, { wide: this.doc.nodes[id].wide ? undefined : true }));
+  }
+
   unfoldAll() {
     let d = this.doc;
     for (const n of Object.values(d.nodes)) if (n.collapsed) d = patchNode(d, n.id, { collapsed: undefined });
