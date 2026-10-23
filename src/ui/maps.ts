@@ -4,6 +4,7 @@ import { loadIndex } from '../model/storage';
 import { templateFor } from '../model/templates';
 import type { MapMeta } from '../model/types';
 import { Composer } from './composer';
+import { Confirm } from './confirm';
 import { fuzzy, h, icon, modal, relTime, type Layer } from './dom';
 
 export class MapsPanel implements Layer {
@@ -13,7 +14,6 @@ export class MapsPanel implements Layer {
   private list: HTMLDivElement;
   private shown: (MapMeta | 'new')[] = [];
   private sel = 1;
-  private armed: string | null = null;
 
   constructor(private app: App) {
     app.store.flush();
@@ -23,7 +23,7 @@ export class MapsPanel implements Layer {
     foot.innerHTML = [
       ['enter', 'open'],
       ['mod+d', 'duplicate'],
-      ['mod+backspace', 'delete'],
+      ['backspace', 'delete'],
     ]
       .map(([k, l]) => `<span class="hint">${kbd(k)}<span>${l}</span></span>`)
       .join('');
@@ -78,7 +78,6 @@ export class MapsPanel implements Layer {
         const meta = h('span', 'row-group');
         meta.innerHTML = `${escapeHtml(templateFor(m.kind).label)} · ${m.count - 1} ideas · ${relTime(m.updated)}${current ? ' · <b>open</b>' : ''}`;
         row.append(meta);
-        if (this.armed === m.id) row.classList.add('armed');
         return row;
       }),
     );
@@ -102,10 +101,6 @@ export class MapsPanel implements Layer {
   key(_e: KeyboardEvent, combo: string): boolean {
     const n = this.shown.length;
     const cur = this.shown[this.sel];
-    if (combo !== 'mod+backspace' && combo !== 'mod+delete' && this.armed) {
-      this.armed = null;
-      this.render();
-    }
     switch (combo) {
       case 'escape':
         this.app.popLayer(this);
@@ -128,22 +123,32 @@ export class MapsPanel implements Layer {
           this.render();
         }
         return true;
+      case 'backspace':
+      case 'delete':
+        // With text in the search box, Backspace edits it.
+        if (combo === 'backspace' && this.input.value) return false;
+        if (cur && cur !== 'new') this.confirmDelete(cur);
+        return true;
       case 'mod+backspace':
       case 'mod+delete':
-        if (!cur || cur === 'new') return true;
-        if (this.armed !== cur.id) {
-          this.armed = cur.id;
-          this.app.toast(`Press again to delete “${cur.title}”. This cannot be undone.`, 'warn');
-          this.render();
-          return true;
-        }
-        this.armed = null;
-        this.app.deleteMapById(cur.id);
-        this.app.toast(`Deleted “${cur.title}”`);
-        this.render();
+        if (cur && cur !== 'new') this.confirmDelete(cur);
         return true;
     }
     return false;
+  }
+
+  private confirmDelete(m: MapMeta) {
+    this.app.pushLayer(
+      new Confirm(this.app, `Delete “${m.title}”?`, `This map and its ${m.count - 1} ideas will be gone for good. This cannot be undone.`, 'Delete', () => {
+        this.app.deleteMapById(m.id);
+        this.app.toast(`Deleted “${m.title}”`);
+      }),
+    );
+  }
+
+  resume() {
+    this.render();
+    this.input.focus();
   }
 
   close() {

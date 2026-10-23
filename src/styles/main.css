@@ -1219,11 +1219,6 @@ body.moving-idea * {
   font-weight: 600;
 }
 
-.row.armed {
-  background: color-mix(in oklch, var(--danger) 18%, transparent);
-  color: var(--text);
-}
-
 .empty {
   padding: 22px;
   text-align: center;
@@ -1260,6 +1255,26 @@ body.moving-idea * {
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
+}
+
+.panel.confirm {
+  width: min(420px, 100%);
+}
+
+.panel.confirm h2 {
+  padding: 20px 20px 0;
+  font-size: 22px;
+}
+
+.panel.confirm p {
+  margin: 0;
+  padding: 10px 20px 20px;
+  line-height: 1.5;
+}
+
+.danger-btn {
+  background: var(--danger);
+  color: #fff;
 }
 
 /* Help */
