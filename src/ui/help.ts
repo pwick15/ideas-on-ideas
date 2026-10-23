@@ -10,6 +10,17 @@ const GROUPS: { group: Group; title: string; extra?: [string, string][] }[] = [
     extra: [['arrowup arrowdown arrowleft arrowright', 'Move between ideas']],
   },
   {
+    group: 'Select',
+    title: 'Select several',
+    extra: [
+      ['shift+click', 'Add or remove an idea'],
+      ['shift+arrowup shift+arrowdown', 'Extend along a row of ideas'],
+      ['g', 'Move the selection (or drag any of them)'],
+      ['alt+arrowup alt+arrowdown', 'Reorder the selection'],
+      ['escape', 'Clear the selection'],
+    ],
+  },
+  {
     group: 'Grow',
     title: 'Grow',
   },

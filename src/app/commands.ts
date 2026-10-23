@@ -12,7 +12,7 @@ import { Search } from '../ui/search';
 import { SprintSetup, stopSprint } from '../ui/sprint';
 import type { App } from './app';
 
-export type Group = 'Move' | 'Grow' | 'Shape' | 'Spark' | 'Judge' | 'View' | 'Maps' | 'App';
+export type Group = 'Move' | 'Select' | 'Grow' | 'Shape' | 'Spark' | 'Judge' | 'View' | 'Maps' | 'App';
 
 export interface Command {
   id: string;
@@ -62,6 +62,12 @@ export function buildCommands(app: App): Command[] {
       hint: 'A scratch pad attached to the idea, for writing more than fits on the map.',
     },
     { id: 'grow.paste', title: 'Paste a list as ideas', group: 'Grow', keys: ['mod+v'], run: () => app.requestPaste(), native: true, hint: 'Indented lists keep their structure.' },
+
+    { id: 'select.up', title: 'Add the idea above to the selection', group: 'Select', keys: ['shift+arrowup'], run: () => app.extendSelection('up'), when: hasFocus, repeat: true, hidden: true },
+    { id: 'select.down', title: 'Add the idea below to the selection', group: 'Select', keys: ['shift+arrowdown'], run: () => app.extendSelection('down'), when: hasFocus, repeat: true, hidden: true },
+    { id: 'select.left', title: 'Add the idea to the left to the selection', group: 'Select', keys: ['shift+arrowleft'], run: () => app.extendSelection('left'), when: hasFocus, repeat: true, hidden: true },
+    { id: 'select.right', title: 'Add the idea to the right to the selection', group: 'Select', keys: ['shift+arrowright'], run: () => app.extendSelection('right'), when: hasFocus, repeat: true, hidden: true },
+    { id: 'select.clear', title: 'Clear the selection', group: 'Select', keys: ['escape'], run: () => app.clearSelection(), when: () => app.selection.size > 0, hidden: true },
 
     // Shape
     { id: 'shape.delete', title: 'Delete idea and its branches', group: 'Shape', keys: ['backspace', 'delete'], run: () => app.remove(), when: hasFocus },

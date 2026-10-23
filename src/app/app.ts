@@ -35,7 +35,7 @@ import {
   isMapKey,
 } from '../model/storage';
 import { createFromTemplate, exampleMap } from '../model/templates';
-import { HUES, depthOf, hueOf, isCutDeep, rootOf, subtreeSize, visibleOrder } from '../model/tree';
+import { HUES, depthOf, isAncestor, hueOf, isCutDeep, rootOf, subtreeSize, visibleOrder } from '../model/tree';
 import type { Id, LayoutKind, MapDoc, MapKind, Rating, Settings } from '../model/types';
 import { SparkDeck, type Spark } from '../sparks/deck';
 import { copyText, download, h, slug, type Layer } from '../ui/dom';
@@ -87,6 +87,10 @@ export class App {
   readonly view: MapView;
   settings: Settings;
   focus: Id | null = null;
+  /** Ideas picked together to move or delete as a group. Empty when working on one idea. */
+  selection = new Set<Id>();
+  /** Where a Shift+arrow selection started. */
+  private anchor: Id | null = null;
   editing: EditState | null = null;
   layers: Layer[] = [];
   hideCut = false;
@@ -125,8 +129,8 @@ export class App {
         if (this.editing) this.endEdit('commit');
         return !!this.doc.nodes[id];
       },
-      drop: (id, target) => this.moveIdea(id, target),
-      freeMove: (id, dx, dy) => this.freeMove(id, dx, dy),
+      drop: (ids, target) => this.moveIdeas(ids, target),
+      freeMove: (ids, dx, dy) => this.freeMove(ids, dx, dy),
     });
 
     this.live = h('div', { class: 'sr-only', 'aria-live': 'polite' });
@@ -185,6 +189,9 @@ export class App {
     this.settings.lastMap = doc.id;
     this.saveSettings();
     this.lastChild.clear();
+    this.anchor = null;
+    this.selection = new Set();
+    this.view.setSelection(this.selection);
     this.hideCut = false;
     // A fresh renderer state per map keeps animations from flying across maps.
     this.view.render({ doc: { ...doc, roots: [] }, visible: [], kids: () => [], focus: null, editing: null, layout: doc.layout });
@@ -219,6 +226,10 @@ export class App {
     const doc = this.doc;
     if (this.focus && !doc.nodes[this.focus]) this.focus = doc.roots[0] ?? null;
     if (this.focus && this.hideCut && isCutDeep(doc.nodes, this.focus)) this.focus = this.nearestVisible(this.focus);
+    if ([...this.selection].some((id) => !doc.nodes[id])) {
+      this.selection = new Set([...this.selection].filter((id) => doc.nodes[id]));
+      this.view.setSelection(this.selection);
+    }
     this.view.render({
       doc,
       visible: this.visible(),
@@ -266,6 +277,10 @@ export class App {
       if (!opts.quiet) this.announce(id);
     }
     if (prev !== id) this.hintbar.update();
+  }
+
+  private say(msg: string) {
+    this.live.textContent = msg;
   }
 
   private announce(id: Id) {
@@ -418,6 +433,7 @@ export class App {
     if (this.editing) this.endEdit('commit');
     const n = this.doc.nodes[id];
     if (!n) return;
+    this.clearSelection();
     this.editing = {
       id,
       isNew: !!opts.isNew,
@@ -727,12 +743,21 @@ export class App {
     return best;
   }
 
+  /** The ideas that sit in a row with this one: the same parent, and for first-level branches the same side. */
+  private siblingsOf(id: Id): Id[] {
+    const n = this.doc.nodes[id];
+    return (n.parent ? this.visibleKids(n.parent) : this.doc.roots).filter(
+      (s) => !n.parent || this.doc.nodes[n.parent].parent || this.sideOf(s) === this.sideOf(id),
+    );
+  }
+
   move(dir: Dir) {
     const id = this.focus;
     if (!id || !this.doc.nodes[id]) {
       this.setFocus(this.doc.roots[0] ?? null);
       return;
     }
+    if (!this.topLayer()) this.clearSelection();
     const n = this.doc.nodes[id];
     const intent = this.intent(id, dir);
     let target: Id | null = null;
@@ -747,9 +772,7 @@ export class App {
       if (intent !== 'child') pool = pool.filter((k) => this.sideOf(k) === (intent === 'childRight' ? 1 : -1));
       target = this.pickChild(id, pool);
     } else if (intent === 'prev' || intent === 'next') {
-      const sibs = (n.parent ? this.visibleKids(n.parent) : this.doc.roots).filter(
-        (s) => !n.parent || this.doc.nodes[n.parent].parent || this.sideOf(s) === this.sideOf(id),
-      );
+      const sibs = this.siblingsOf(id);
       const i = sibs.indexOf(id);
       target = sibs[i + (intent === 'prev' ? -1 : 1)] ?? null;
     }
@@ -758,57 +781,172 @@ export class App {
     else this.view.flash(id, 'bump');
   }
 
+  /** One Alt+arrow step for one idea. Null when it cannot go that way. */
+  private shapeStep(doc: MapDoc, id: Id, dir: Dir): { doc: MapDoc; promoted: boolean } | null {
+    const n = doc.nodes[id];
+    const layout = doc.layout;
+    let next: MapDoc | null = null;
+    let promoted = false;
+    if (!n.parent) {
+      if (dir === 'left' || dir === 'right') next = moveAmongSiblings(doc, id, dir === 'left' ? -1 : 1);
+    } else if (layout === 'radial') {
+      next =
+        dir === 'up' ? moveAmongSiblings(doc, id, -1)
+        : dir === 'down' ? moveAmongSiblings(doc, id, 1)
+        : dir === 'right' ? indent(doc, id)
+        : outdent(doc, id);
+    } else {
+      const intent = this.intent(id, dir);
+      if (intent === 'prev') next = moveAmongSiblings(doc, id, -1);
+      else if (intent === 'next') next = moveAmongSiblings(doc, id, 1);
+      else if (intent === 'child') next = indent(doc, id);
+      else if (intent === 'parent') {
+        const parentIsRoot = !doc.nodes[n.parent].parent;
+        next = parentIsRoot && layout === 'balanced' ? flipSide(doc, id) : outdent(doc, id);
+        promoted = !!next && parentIsRoot && layout !== 'balanced';
+      }
+    }
+    return next ? { doc: next, promoted } : null;
+  }
+
+  /** Alt+arrows: reorder, indent, outdent. Acts on the whole selection when there is one. */
   moveNode(dir: Dir) {
     const id = this.focus;
     if (!id) return;
-    const n = this.doc.nodes[id];
-    const layout = this.doc.layout;
-    let next: MapDoc | null = null;
-    if (!n.parent) {
-      if (dir === 'left' || dir === 'right') next = moveAmongSiblings(this.doc, id, dir === 'left' ? -1 : 1);
-    } else if (layout === 'radial') {
-      next =
-        dir === 'up' ? moveAmongSiblings(this.doc, id, -1)
-        : dir === 'down' ? moveAmongSiblings(this.doc, id, 1)
-        : dir === 'right' ? indent(this.doc, id)
-        : outdent(this.doc, id);
-    } else {
-      const intent = this.intent(id, dir);
-      if (intent === 'prev') next = moveAmongSiblings(this.doc, id, -1);
-      else if (intent === 'next') next = moveAmongSiblings(this.doc, id, 1);
-      else if (intent === 'child') next = indent(this.doc, id);
-      else if (intent === 'parent') {
-        const parentIsRoot = !this.doc.nodes[n.parent].parent;
-        next = parentIsRoot && layout === 'balanced' ? flipSide(this.doc, id) : outdent(this.doc, id);
-        if (next && parentIsRoot && layout !== 'balanced') this.toast('Promoted to a new center');
+    const ids = this.selection.size ? this.topLevel(this.selection) : [id];
+    if (!ids.length) return;
+    // Later ideas go first when the group moves down or out, so they keep their order.
+    const first = this.doc.nodes[ids[0]];
+    const heading = !first.parent || this.doc.layout === 'radial' ? ({ up: 'prev', down: 'next', left: 'prev', right: 'next' } as const)[dir] : this.intent(ids[0], dir);
+    const ordered = this.doc.layout === 'radial' && first.parent ? (dir === 'down' || dir === 'left' ? ids.slice().reverse() : ids) : heading === 'next' || heading === 'parent' ? ids.slice().reverse() : ids;
+    let cur = this.doc;
+    let promoted = false;
+    for (const i of ordered) {
+      const step = this.shapeStep(cur, i, dir);
+      if (!step) {
+        this.view.flash(id, 'bump');
+        return;
       }
+      cur = step.doc;
+      promoted ||= step.promoted;
     }
-    if (!this.commit(next)) this.view.flash(id, 'bump');
+    if (promoted) this.toast('Promoted to a new center');
+    if (!this.commit(cur)) this.view.flash(id, 'bump');
   }
 
-  /** Puts an idea inside another, or next to it. Returns false when that is not possible or changes nothing. */
-  moveIdea(id: Id, t: DropTarget): boolean {
-    const doc = this.doc;
-    const target = doc.nodes[t.id];
-    if (!target || !doc.nodes[id]) return false;
-    let next: MapDoc | null;
-    if (t.where === 'into') {
-      next = reparent(doc, id, t.id, undefined, !target.parent && doc.layout === 'balanced' ? t.side : undefined);
-    } else {
-      const list = target.parent ? doc.nodes[target.parent].children : doc.roots;
-      const firstLevel = !!target.parent && !doc.nodes[target.parent].parent;
-      const at = list.indexOf(t.id) + (t.where === 'after' ? 1 : 0);
-      next = reparent(doc, id, target.parent, at, firstLevel ? target.side ?? t.side : undefined);
+  /**
+   * Puts ideas inside another idea, or next to it, as one undo step. Ideas under another picked
+   * idea ride along with it. Returns false when that is not possible or changes nothing.
+   */
+  moveIdeas(ids: Id[], t: DropTarget, focus: Id | null = ids[0] ?? null): boolean {
+    const target = this.doc.nodes[t.id];
+    if (!target) return false;
+    const picked = this.topLevel(ids);
+    if (!picked.length || picked.some((id) => id === t.id || isAncestor(this.doc.nodes, id, t.id))) return false;
+    // Dropping after puts the last one first, so the group keeps its order.
+    const ordered = t.where === 'after' ? picked.slice().reverse() : picked;
+    let doc = this.doc;
+    let changed = false;
+    for (const id of ordered) {
+      const tg = doc.nodes[t.id];
+      let next: MapDoc | null;
+      if (t.where === 'into') {
+        next = reparent(doc, id, t.id, undefined, !tg.parent && doc.layout === 'balanced' ? t.side : undefined);
+      } else {
+        const list = tg.parent ? doc.nodes[tg.parent].children : doc.roots;
+        const firstLevel = !!tg.parent && !doc.nodes[tg.parent].parent;
+        const at = list.indexOf(t.id) + (t.where === 'after' ? 1 : 0);
+        next = reparent(doc, id, tg.parent, at, firstLevel ? tg.side ?? t.side : undefined);
+      }
+      if (next) {
+        doc = next;
+        changed = true;
+      }
     }
-    if (!this.commit(next, id)) return false;
-    this.view.flash(id, 'pulse');
+    if (!changed || !this.commit(doc, focus)) return false;
+    for (const id of picked) this.view.flash(id, 'pulse');
     return true;
   }
 
-  /** Leaves an idea where it was dragged, with everything under it. */
-  freeMove(id: Id, dx: number, dy: number) {
-    if (!this.doc.nodes[id]) return;
-    this.commit(offsetNode(this.doc, id, dx, dy), id);
+  /** Leaves ideas where they were dragged, with everything under them. */
+  freeMove(ids: Id[], dx: number, dy: number) {
+    let doc = this.doc;
+    for (const id of this.topLevel(ids)) doc = offsetNode(doc, id, dx, dy);
+    this.commit(doc, ids[0] ?? null);
+  }
+
+  // -------------------------------------------------------------- selection
+
+  /** Drops ideas that sit under another idea in the list, and puts the rest in map order. */
+  topLevel(ids: Iterable<Id>): Id[] {
+    const set = new Set(ids);
+    const nodes = this.doc.nodes;
+    const order = new Map(this.visible().map((id, i) => [id, i]));
+    return [...set]
+      .filter((id) => nodes[id])
+      .filter((id) => {
+        for (let p = nodes[id].parent; p; p = nodes[p].parent) if (set.has(p)) return false;
+        return true;
+      })
+      .sort((a, b) => (order.get(a) ?? Infinity) - (order.get(b) ?? Infinity));
+  }
+
+  setSelection(ids: Iterable<Id>) {
+    this.selection = new Set([...ids].filter((id) => this.doc.nodes[id]));
+    this.view.setSelection(this.selection);
+    this.hintbar.update();
+  }
+
+  clearSelection() {
+    if (!this.selection.size) return;
+    this.anchor = null;
+    this.setSelection([]);
+  }
+
+  /** Shift-click: add the idea to the selection, or take it out again. The focused idea joins first. */
+  toggleSelect(id: Id) {
+    const sel = new Set(this.selection);
+    if (!sel.size && this.focus && this.focus !== id) sel.add(this.focus);
+    if (sel.has(id)) sel.delete(id);
+    else sel.add(id);
+    this.anchor = id;
+    this.setSelection(sel);
+    this.setFocus(id, { quiet: true });
+    this.say(sel.size ? `${sel.size} selected` : 'Selection cleared');
+  }
+
+  /** Shift+arrows: grow or shrink the selection along a row of ideas, from where it started. */
+  extendSelection(dir: Dir) {
+    const id = this.focus;
+    if (!id) return;
+    const n = this.doc.nodes[id];
+    const heading = !n.parent ? (dir === 'left' ? 'prev' : dir === 'right' ? 'next' : null)
+      : this.doc.layout === 'radial' ? (dir === 'up' ? 'prev' : dir === 'down' ? 'next' : null)
+      : this.intent(id, dir);
+    const row = this.siblingsOf(id);
+    const target = heading === 'prev' || heading === 'next' ? row[row.indexOf(id) + (heading === 'prev' ? -1 : 1)] : undefined;
+    if (!target) {
+      this.view.flash(id, 'bump');
+      if (heading !== 'prev' && heading !== 'next') this.toast('Shift+arrows pick along a row of ideas. Shift-click picks any idea.');
+      return;
+    }
+    const sel = new Set(this.selection);
+    if (!sel.size) {
+      sel.add(id);
+      this.anchor = id;
+    }
+    if (!this.anchor || !sel.has(this.anchor)) this.anchor = id;
+    const a = row.indexOf(this.anchor);
+    if (a < 0) sel.add(target);
+    else {
+      // Everything between where it started and the idea reached, so the same key backs it off again.
+      const [lo, hi] = [Math.min(a, row.indexOf(target)), Math.max(a, row.indexOf(target))];
+      for (const r of row) sel.delete(r);
+      for (const r of row.slice(lo, hi + 1)) sel.add(r);
+    }
+    this.setSelection(sel);
+    this.setFocus(target, { quiet: true });
+    this.say(`${sel.size} selected`);
   }
 
   /** Sends dragged ideas back to their automatic positions: the focused branch, or the whole map when nothing there was moved. */
@@ -854,17 +992,28 @@ export class App {
   }
 
   remove() {
-    const id = this.focus;
-    if (!id) return;
-    const n = this.doc.nodes[id];
-    const size = subtreeSize(this.doc.nodes, id);
-    const r = deleteNode(this.doc, id);
-    this.commit(r.doc, r.focus);
-    const label = (n.text || 'idea').slice(0, 32);
-    this.toast(size > 1 ? `Deleted “${label}” and ${size - 1} more` : `Deleted “${label}”`, 'info', {
-      label: 'Undo',
-      run: () => this.undo(),
-    });
+    const ids = this.selection.size ? this.topLevel(this.selection) : this.focus ? [this.focus] : [];
+    if (!ids.length) return;
+    let doc = this.doc;
+    let focus: Id | null = null;
+    let size = 0;
+    for (const id of ids) {
+      size += subtreeSize(this.doc.nodes, id);
+      const r = deleteNode(doc, id);
+      doc = r.doc;
+      focus = r.focus;
+    }
+    // The neighbour picked for focus may itself have been deleted next.
+    while (focus && !doc.nodes[focus]) focus = this.doc.nodes[focus]?.parent ?? null;
+    this.clearSelection();
+    this.commit(doc, focus);
+    const first = this.doc.nodes[ids[0]];
+    const label = (first.text || 'idea').slice(0, 32);
+    const msg =
+      ids.length > 1 ? `Deleted ${ids.length} ideas${size > ids.length ? ` and ${size - ids.length} more` : ''}`
+      : size > 1 ? `Deleted “${label}” and ${size - 1} more`
+      : `Deleted “${label}”`;
+    this.toast(msg, 'info', { label: 'Undo', run: () => this.undo() });
   }
 
   rate(r: Rating | 0) {
@@ -1156,6 +1305,8 @@ export class App {
     if (this.editing?.id === id) return;
     if (this.editing) this.endEdit('commit');
     if (top) return;
+    if (e.shiftKey || e.metaKey || e.ctrlKey) return this.toggleSelect(id);
+    this.clearSelection();
     this.setFocus(id, { quiet: true });
     if ((e.target as HTMLElement).closest('.node-note')) this.runCommand('grow.notes');
   }

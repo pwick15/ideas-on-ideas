@@ -10,39 +10,52 @@ const clip = (s: string) => (s.length > 40 ? s.slice(0, 39) + '…' : s) || 'Unt
 export class MoveMode implements Layer {
   readonly name = 'move';
   private from: Id;
+  /** What is being moved: the whole selection, or the focused idea. */
+  private ids: Id[];
   private hud: HTMLElement;
   private dest: HTMLSpanElement;
 
   constructor(private app: App) {
     this.from = app.focus!;
+    this.ids = app.selection.size ? app.topLevel(app.selection) : [this.from];
     this.dest = h('span', 'move-dest');
     this.hud = h(
       'div',
       'hud move-hud',
       h('span', 'hud-title', 'Move'),
-      h('span', 'hud-text', `“${clip(app.doc.nodes[this.from].text)}” into `, this.dest),
+      h('span', 'hud-text', `${this.what()} into `, this.dest),
     );
     app.topbar.slot.append(this.hud);
     this.update();
   }
 
+  private what() {
+    return this.ids.length > 1 ? `${this.ids.length} ideas` : `“${clip(this.app.doc.nodes[this.ids[0]].text)}”`;
+  }
+
+  private inside(to: Id) {
+    return this.ids.some((i) => this.app.view.isWithin(to, i));
+  }
+
   private update() {
     const to = this.app.focus;
-    const valid = !!to && !this.app.view.isWithin(to, this.from);
-    this.app.view.setDropMarks(this.from, to && to !== this.from ? { id: to, where: 'into' } : null, valid);
+    const valid = !!to && !this.inside(to);
+    this.app.view.setDropMarks(this.ids, to && !this.ids.includes(to) ? { id: to, where: 'into' } : null, valid);
     this.dest.textContent = to && valid ? `“${clip(this.app.doc.nodes[to].text)}”` : '…';
   }
 
   private drop(to: Id | null, where: DropWhere) {
-    if (!to || this.app.view.isWithin(to, this.from)) {
+    if (!to || this.inside(to)) {
       this.app.view.flash(to ?? this.from, 'bump');
-      this.app.toast(to === this.from ? 'Arrows or F pick where it goes' : 'An idea cannot go inside itself', 'warn');
+      this.app.toast(to && this.ids.includes(to) ? 'Arrows or F pick where it goes' : 'An idea cannot go inside itself', 'warn');
       return;
     }
     const text = clip(this.app.doc.nodes[to].text);
     this.app.popLayer(this);
-    if (this.app.moveIdea(this.from, { id: to, where })) {
-      this.app.toast(where === 'into' ? `Moved into “${text}”` : `Moved after “${text}”`, 'good');
+    const subject = this.ids.length > 1 ? `${this.ids.length} ideas` : 'Moved';
+    if (this.app.moveIdeas(this.ids, { id: to, where }, this.from)) {
+      const verb = this.ids.length > 1 ? `${subject} moved` : subject;
+      this.app.toast(where === 'into' ? `${verb} into “${text}”` : `${verb} after “${text}”`, 'good');
     } else {
       this.app.setFocus(this.from);
       this.app.toast('It is already there');

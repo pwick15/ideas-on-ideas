@@ -26,7 +26,8 @@ Sources: [Diehl and Stroebe, via SE University PDF](https://homepages.se.edu/cvo
 - **Map kinds.** Brainstorm, Video, Short, Article, Software, Starburst (who/what/when/where/why/how) and SCAMPER. Each one seeds a few starter branches and weights the spark deck toward that kind of work. A short-form map asks about the first 1.5 seconds and loops; a software map asks who the first user is and what to cut.
 - **More than one center.** `N` adds another central idea on the same map. `L` draws a dotted bridge between any two ideas, across branches or centers.
 - **Move ideas around.** Drag an idea onto another to nest it there, or onto the top or bottom edge of one to place it before or after. On a touch screen, hold the idea first. From the keyboard, `G` picks a new home with the arrows or jump letters: `Enter` puts it inside, `Shift+Enter` puts it after. `Alt` + arrows still nudge an idea one step at a time.
-- **Place ideas freely.** Hold `Alt` and drag an idea to leave it exactly where you drop it. Its branches go with it, and branch lines and links redraw from the new spot. `Esc` mid-drag cancels. "Put dragged ideas back in place" in the command palette undoes it for the focused branch, or the whole map. Switching layout or moving an idea to a new parent also resets its position. Mouse only for now.
+- **Select several.** `Shift+click` (or `Cmd/Ctrl+click`) adds or removes an idea. From the keyboard, `Shift+↑/↓` extends the selection along a row of ideas from where you started, and the same key backs it off again. Then move them together: drag any selected idea onto a new home, press `G` and pick one with the arrows, or use `Alt` + arrows to reorder, indent or outdent the group. `Backspace` deletes them (undo brings them back) and `Esc` clears the selection. An idea picked along with its parent just rides along with it.
+- **Place ideas freely.** Hold `Alt` and drag an idea (or a whole selection) to leave it exactly where you drop it. Its branches go with it, and branch lines and links redraw from the new spot. `Esc` mid-drag cancels. "Put dragged ideas back in place" in the command palette undoes it for the focused branch, or the whole map. Switching layout or moving an idea to a new parent also resets its position. Mouse only for now.
 - **Make this the center.** `Shift+C` turns the focused idea into the center of its tree. The old center becomes one of its branches, so nothing is deleted. Useful when you branched off one topic and then grew everything under it.
 - **Notes.** `O` opens a scratch pad beside the map for the focused idea, for anything longer than a label. Notes save as you type and stay with the idea when it moves. Ideas with notes show a small mark (click it to open them), search looks inside notes, and the harvest shows them.
 - **Four layouts.** `V` cycles mind map (balanced left and right), tree, top-down and radial, with animated transitions.
@@ -49,6 +50,7 @@ Sources: [Diehl and Stroebe, via SE University PDF](https://homepages.se.edu/cvo
 | `O` | Notes for the idea |
 | Arrows | Move between ideas |
 | `G` | Move the idea somewhere else (or drag it) |
+| `Shift+click`, `Shift+↑/↓` | Select several ideas |
 | `Alt` + drag | Place an idea freely, with its branches |
 | `Alt` + arrows | Reorder, indent, outdent, switch side |
 | `Shift+C` | Make the idea the center |

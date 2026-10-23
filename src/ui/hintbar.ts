@@ -26,6 +26,8 @@ export class Hintbar {
       hints = top.hints?.().length ? top.hints() : null;
     } else if (!app.doc.roots.length) {
       hints = [['n', 'add a center'], ['m', 'maps'], ['mod+k', 'commands'], ['?', 'shortcuts']];
+    } else if (app.selection.size) {
+      hints = [['shift+arrowup shift+arrowdown', 'select more'], ['g', 'move'], ['alt+arrowup alt+arrowdown', 'reorder'], ['backspace', 'delete'], ['escape', 'clear']];
     } else {
       const n = app.focus ? app.doc.nodes[app.focus] : null;
       hints = n && !n.parent

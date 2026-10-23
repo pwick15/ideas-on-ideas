@@ -65,9 +65,9 @@ export interface ViewEvents {
   cameraMoved(): void;
   /** Return false to refuse dragging an idea, for example while a panel is open. */
   dragStart(id: Id): boolean;
-  drop(id: Id, target: DropTarget): void;
-  /** An idea was dragged freely by this much, in world units. */
-  freeMove(id: Id, dx: number, dy: number): void;
+  drop(ids: Id[], target: DropTarget): void;
+  /** These ideas (each with its branches) were dragged freely by this much, in world units. */
+  freeMove(ids: Id[], dx: number, dy: number): void;
 }
 
 export class MapView {
@@ -92,7 +92,8 @@ export class MapView {
 
   private doc: MapDoc | null = null;
   private focusId: Id | null = null;
-  private marks: { src: Id | null; target: Id | null; cls: string | null } = { src: null, target: null, cls: null };
+  private marks: { src: string; target: Id | null; cls: string | null } = { src: '', target: null, cls: null };
+  private selected = new Set<Id>();
   /** True while an idea is being dragged with the pointer. */
   dragging = false;
   private raf = 0;
@@ -194,6 +195,7 @@ export class MapView {
         nv.noteCache = n.note;
         nv.note.title = n.note ? clip(n.note, 280) : '';
       }
+      nv.el.classList.toggle('selected', this.selected.has(id));
       if (n.children.length) nv.el.setAttribute('aria-expanded', String(!n.collapsed));
       else nv.el.removeAttribute('aria-expanded');
       if (!isEditing && nv.textCache !== n.text) {
@@ -669,6 +671,22 @@ export class MapView {
     }
   }
 
+  /** Paints the ideas picked as a group. */
+  setSelection(ids: ReadonlySet<Id>) {
+    this.selected = new Set(ids);
+    for (const nv of this.nvs.values()) nv.el.classList.toggle('selected', this.selected.has(nv.id));
+  }
+
+  /** What a drag that starts on `id` carries: the whole selection when `id` is in it, otherwise just `id`. Ideas under another picked idea ride along with it. */
+  private dragGroup(id: Id): Id[] {
+    if (this.selected.size < 2 || !this.selected.has(id)) return [id];
+    return [...this.selected].filter((s) => this.nvs.has(s) && ![...this.ancestorsOf(s)].some((a) => this.selected.has(a)));
+  }
+
+  private *ancestorsOf(id: Id): Generator<Id> {
+    for (let p = this.parentOf.get(id); p; p = this.parentOf.get(p)) yield p;
+  }
+
   textEl(id: Id): HTMLDivElement | null {
     return this.nvs.get(id)?.text ?? null;
   }
@@ -720,12 +738,14 @@ export class MapView {
     if (na && nb) this.previewPath.setAttribute('d', linkPath(this.box(na), this.box(nb)).d);
   }
 
-  /** Marks an idea being moved (with everything under it) and where it would land. Nulls clear the marks. */
-  setDropMarks(src: Id | null, target: DropTarget | null, valid = true) {
-    if (src !== this.marks.src) {
+  /** Marks ideas being moved (with everything under them) and where they would land. Nulls clear the marks. */
+  setDropMarks(src: Id | Id[] | null, target: DropTarget | null, valid = true) {
+    const ids = src === null ? [] : Array.isArray(src) ? src : [src];
+    const key = ids.join(',');
+    if (key !== this.marks.src) {
       for (const nv of this.nvs.values()) nv.el.classList.remove('drag-src');
-      if (src) for (const id of this.visibleSubtree(src)) this.nvs.get(id)?.el.classList.add('drag-src');
-      this.marks.src = src;
+      for (const id of ids) for (const s of this.visibleSubtree(id)) this.nvs.get(s)?.el.classList.add('drag-src');
+      this.marks.src = key;
     }
     const cls = target ? (valid ? 'drop-' + target.where : 'drop-no') : null;
     const id = target?.id ?? null;
@@ -802,7 +822,7 @@ export class MapView {
     let press: { id: Id; pointerId: number; x: number; y: number; lx: number; ly: number; touch: boolean; free: boolean; timer: number } | null = null;
     // A free move (Alt held) slides the idea and its branches where the pointer goes; otherwise it is a re-parenting drag with a ghost.
     type Free = { ids: Id[]; base: Map<Id, { x: number; y: number }>; start: { x: number; y: number }; dx: number; dy: number };
-    let moving: { id: Id; pointerId: number; ghost: HTMLElement | null; free: Free | null; x: number; y: number; hit: DropTarget | null; raf: number } | null = null;
+    let moving: { ids: Id[]; pointerId: number; ghost: HTMLElement | null; free: Free | null; x: number; y: number; hit: DropTarget | null; raf: number } | null = null;
     let swallowClick = false;
 
     const clearPress = () => {
@@ -817,9 +837,10 @@ export class MapView {
       if (moving.free) return slide(moving.free, x, y);
       moving.ghost!.style.transform = `translate(${Math.round(x + 14)}px, ${Math.round(y + 12)}px)`;
       const hit = this.dropAt(x, y);
-      const valid = !!hit && !this.isWithin(hit.id, moving.id);
+      const ids = moving.ids;
+      const valid = !!hit && !ids.some((i) => this.isWithin(hit.id, i));
       moving.hit = valid ? hit : null;
-      this.setDropMarks(moving.id, hit, valid);
+      this.setDropMarks(ids, hit, valid);
     };
 
     const slide = (f: Free, x: number, y: number) => {
@@ -873,8 +894,9 @@ export class MapView {
       } catch {
         /* the pointer is already gone */
       }
+      const group = this.dragGroup(p.id);
       if (p.free) {
-        const ids = this.visibleSubtree(p.id);
+        const ids = [...new Set(group.flatMap((g) => this.visibleSubtree(g)))];
         const base = new Map<Id, { x: number; y: number }>();
         for (const id of ids) {
           const v = this.nvs.get(id);
@@ -886,7 +908,7 @@ export class MapView {
         }
         const free: Free = { ids, base, start: this.toWorld(p.x, p.y), dx: 0, dy: 0 };
         document.body.classList.add('moving-free');
-        moving = { id: p.id, pointerId: p.pointerId, ghost: null, free, x: p.lx, y: p.ly, hit: null, raf: 0 };
+        moving = { ids: group, pointerId: p.pointerId, ghost: null, free, x: p.lx, y: p.ly, hit: null, raf: 0 };
         this.dragging = true;
         window.addEventListener('keydown', onMoveKey, true);
         slide(free, p.lx, p.ly);
@@ -901,9 +923,10 @@ export class MapView {
         ghost.classList.add('tinted');
       }
       const label = document.createElement('span');
-      label.textContent = this.doc?.nodes[p.id]?.text || 'Untitled';
+      label.textContent = group.length > 1 ? `${group.length} ideas` : this.doc?.nodes[p.id]?.text || 'Untitled';
       ghost.append(label);
-      const more = this.doc ? subtreeSize(this.doc.nodes, p.id) - 1 : 0;
+      const doc = this.doc;
+      const more = doc ? group.reduce((s, g) => s + subtreeSize(doc.nodes, g), 0) - group.length : 0;
       if (more) {
         const count = document.createElement('span');
         count.className = 'drag-more';
@@ -912,7 +935,7 @@ export class MapView {
       }
       document.body.append(ghost);
       document.body.classList.add('moving-idea');
-      moving = { id: p.id, pointerId: p.pointerId, ghost, free: null, x: p.lx, y: p.ly, hit: null, raf: 0 };
+      moving = { ids: group, pointerId: p.pointerId, ghost, free: null, x: p.lx, y: p.ly, hit: null, raf: 0 };
       this.dragging = true;
       window.addEventListener('keydown', onMoveKey, true);
       track(p.lx, p.ly);
@@ -934,7 +957,7 @@ export class MapView {
       setTimeout(() => (swallowClick = false), 0);
       if (m.free) {
         const { dx, dy } = m.free;
-        if (drop && Math.hypot(dx, dy) >= 1) this.events.freeMove(m.id, dx, dy);
+        if (drop && Math.hypot(dx, dy) >= 1) this.events.freeMove(m.ids, dx, dy);
         else if (this.doc) {
           // Cancelled: glide back to where layout puts them.
           for (const id of m.free.ids) this.dirtyEdges.add(id);
@@ -943,7 +966,7 @@ export class MapView {
         }
         return;
       }
-      if (drop && m.hit) this.events.drop(m.id, m.hit);
+      if (drop && m.hit) this.events.drop(m.ids, m.hit);
     };
 
     // Catches releases outside the viewport (the canvas handles its own first).

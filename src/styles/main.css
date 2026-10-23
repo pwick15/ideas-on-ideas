@@ -417,6 +417,27 @@ kbd + kbd {
   background: color-mix(in oklch, var(--branch) calc(var(--tint) + 6%), var(--bg));
 }
 
+/* Picked together to move as a group */
+.node.selected .node-body {
+  box-shadow:
+    0 0 0 2px var(--branch),
+    0 0 0 5px color-mix(in oklch, var(--branch) 30%, transparent);
+  background-image: linear-gradient(color-mix(in oklch, var(--branch) 16%, transparent), color-mix(in oklch, var(--branch) 16%, transparent));
+}
+
+.node.selected.d0 .node-body {
+  box-shadow:
+    0 0 0 3px var(--bg),
+    0 0 0 5px var(--branch, var(--root-bg)),
+    0 0 0 8px color-mix(in oklch, var(--branch, var(--text)) 30%, transparent);
+}
+
+.node.selected.focused .node-body {
+  box-shadow:
+    0 0 0 2px var(--branch),
+    0 0 0 6px color-mix(in oklch, var(--branch) 40%, transparent);
+}
+
 /* Focus and editing */
 .node.focused .node-body {
   box-shadow:
