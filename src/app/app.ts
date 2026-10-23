@@ -3,6 +3,7 @@ import {
   addChild,
   addRoot,
   addSibling,
+  clearOffsets,
   deleteNode,
   duplicate,
   flipSide,
@@ -10,6 +11,7 @@ import {
   insertForest,
   makeCenter,
   moveAmongSiblings,
+  offsetNode,
   outdent,
   patchNode,
   reparent,
@@ -124,6 +126,7 @@ export class App {
         return !!this.doc.nodes[id];
       },
       drop: (id, target) => this.moveIdea(id, target),
+      freeMove: (id, dx, dy) => this.freeMove(id, dx, dy),
     });
 
     this.live = h('div', { class: 'sr-only', 'aria-live': 'polite' });
@@ -802,6 +805,19 @@ export class App {
     return true;
   }
 
+  /** Leaves an idea where it was dragged, with everything under it. */
+  freeMove(id: Id, dx: number, dy: number) {
+    if (!this.doc.nodes[id]) return;
+    this.commit(offsetNode(this.doc, id, dx, dy), id);
+  }
+
+  /** Sends dragged ideas back to their automatic positions: the focused branch, or the whole map when nothing there was moved. */
+  tidyPositions(whole = false) {
+    const from = !whole && this.focus && clearOffsets(this.doc, this.focus) ? this.focus : undefined;
+    if (!this.commit(clearOffsets(this.doc, from))) return this.toast('Nothing has been dragged out of place');
+    this.toast(from ? 'Branch back in its place' : 'Everything back in place', 'info', { label: 'Undo', run: () => this.undo() });
+  }
+
   /** Swaps the focused idea into the middle of its tree. The old center becomes one of its branches. */
   makeCenter() {
     const id = this.focus;
@@ -904,10 +920,12 @@ export class App {
 
   setLayout(kind: LayoutKind) {
     if (this.doc.layout === kind) return;
-    this.store.amend({ ...this.doc, layout: kind });
+    // Dragged positions belong to the layout they were made in.
+    const tidy = clearOffsets(this.doc);
+    this.store.amend({ ...(tidy ?? this.doc), layout: kind });
     this.refresh(false);
     this.view.fit(undefined, 1);
-    this.toast(`Layout: ${LAYOUT_NAMES[kind]}`);
+    this.toast(`Layout: ${LAYOUT_NAMES[kind]}${tidy ? '. Dragged positions reset.' : ''}`);
   }
 
   cycleLayout(dir: 1 | -1) {

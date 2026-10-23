@@ -121,6 +121,7 @@ export function buildCommands(app: App): Command[] {
 
     // View
     { id: 'view.layout', title: 'Next layout', group: 'View', keys: ['v'], run: () => app.cycleLayout(1), hint: 'Mind map, tree, top-down, radial.' },
+    { id: 'view.tidy', title: 'Put dragged ideas back in place', group: 'View', run: () => app.tidyPositions(), hint: 'Alt+drag an idea to place it freely. This undoes that for the focused branch, or the whole map.' },
     { id: 'view.layoutPrev', title: 'Previous layout', group: 'View', keys: ['shift+v'], run: () => app.cycleLayout(-1), hidden: true },
     { id: 'view.balanced', title: 'Layout: mind map', group: 'View', run: () => app.setLayout('balanced') },
     { id: 'view.right', title: 'Layout: tree', group: 'View', run: () => app.setLayout('right') },

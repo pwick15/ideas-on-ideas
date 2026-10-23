@@ -32,6 +32,8 @@ interface NV {
   side: Side;
   depth: number;
   root: Id;
+  /** True when dragging has moved this idea away from its automatic position. */
+  shifted: boolean;
   placed: boolean;
   dying: number;
 }
@@ -64,6 +66,8 @@ export interface ViewEvents {
   /** Return false to refuse dragging an idea, for example while a panel is open. */
   dragStart(id: Id): boolean;
   drop(id: Id, target: DropTarget): void;
+  /** An idea was dragged freely by this much, in world units. */
+  freeMove(id: Id, dx: number, dy: number): void;
 }
 
 export class MapView {
@@ -242,7 +246,7 @@ export class MapView {
     const nv: NV = {
       id, el, body, text, stars, fold, note,
       sig: '', textCache: null, noteCache: undefined, w: 0, h: 0, needsMeasure: true,
-      ax: 0, ay: 0, tax: 0, tay: 0, anchor: 'c', side: 1, depth: 0, root: id,
+      ax: 0, ay: 0, tax: 0, tay: 0, anchor: 'c', side: 1, depth: 0, root: id, shifted: false,
       placed: false, dying: 0,
     };
     this.nvs.set(id, nv);
@@ -298,10 +302,24 @@ export class MapView {
         return { w: nv.w, h: nv.h };
       },
     );
+    // Dragged ideas carry their branches: offsets add up from the center down.
+    const shift = new Map<Id, { x: number; y: number }>();
+    const shiftOf = (id: Id): { x: number; y: number } => {
+      let s = shift.get(id);
+      if (s) return s;
+      const parent = this.parentOf.get(id);
+      const base = parent ? shiftOf(parent) : { x: 0, y: 0 };
+      const o = doc.nodes[id]?.off;
+      s = o ? { x: base.x + o.x, y: base.y + o.y } : base;
+      shift.set(id, s);
+      return s;
+    };
     for (const [id, p] of placements) {
       const nv = this.nvs.get(id);
       if (!nv) continue;
-      this.applyPlacement(nv, p);
+      const s = shiftOf(id);
+      nv.shifted = !!(s.x || s.y);
+      this.applyPlacement(nv, s.x || s.y ? { ...p, ax: p.ax + s.x, ay: p.ay + s.y } : p);
     }
   }
 
@@ -425,9 +443,17 @@ export class MapView {
     if (!c || !p) return;
     const root = this.nvs.get(c.root);
     const rb = root ? this.box(root) : { x: 0, y: 0, w: 0, h: 0 };
+    const pb = this.box(p);
+    const cb = this.box(c);
+    let side = c.side;
+    // A dragged idea can end up on the far side of its parent, so enter it from wherever it is.
+    if (c.shifted && (this.layout === 'balanced' || this.layout === 'right')) {
+      const dx = cb.x + cb.w / 2 - (pb.x + pb.w / 2);
+      if (dx) side = dx > 0 ? 1 : -1;
+    }
     el.setAttribute(
       'd',
-      edgePath(this.layout, this.box(p), this.box(c), c.side, c.depth, !this.parentOf.get(parentId), {
+      edgePath(this.layout, pb, cb, side, c.depth, !this.parentOf.get(parentId), {
         x: rb.x + rb.w / 2,
         y: rb.y + rb.h / 2,
       }),
@@ -773,8 +799,10 @@ export class MapView {
     let drag: { x: number; y: number; moved: boolean } | null = null;
     let pinch: { d: number; z: number } | null = null;
     // Pressing an idea arms a move. A mouse starts it by moving a few pixels, a finger by holding still.
-    let press: { id: Id; pointerId: number; x: number; y: number; lx: number; ly: number; touch: boolean; timer: number } | null = null;
-    let moving: { id: Id; pointerId: number; ghost: HTMLElement; x: number; y: number; hit: DropTarget | null; raf: number } | null = null;
+    let press: { id: Id; pointerId: number; x: number; y: number; lx: number; ly: number; touch: boolean; free: boolean; timer: number } | null = null;
+    // A free move (Alt held) slides the idea and its branches where the pointer goes; otherwise it is a re-parenting drag with a ghost.
+    type Free = { ids: Id[]; base: Map<Id, { x: number; y: number }>; start: { x: number; y: number }; dx: number; dy: number };
+    let moving: { id: Id; pointerId: number; ghost: HTMLElement | null; free: Free | null; x: number; y: number; hit: DropTarget | null; raf: number } | null = null;
     let swallowClick = false;
 
     const clearPress = () => {
@@ -786,11 +814,28 @@ export class MapView {
       if (!moving) return;
       moving.x = x;
       moving.y = y;
-      moving.ghost.style.transform = `translate(${Math.round(x + 14)}px, ${Math.round(y + 12)}px)`;
+      if (moving.free) return slide(moving.free, x, y);
+      moving.ghost!.style.transform = `translate(${Math.round(x + 14)}px, ${Math.round(y + 12)}px)`;
       const hit = this.dropAt(x, y);
       const valid = !!hit && !this.isWithin(hit.id, moving.id);
       moving.hit = valid ? hit : null;
       this.setDropMarks(moving.id, hit, valid);
+    };
+
+    const slide = (f: Free, x: number, y: number) => {
+      const w = this.toWorld(x, y);
+      f.dx = w.x - f.start.x;
+      f.dy = w.y - f.start.y;
+      for (const id of f.ids) {
+        const nv = this.nvs.get(id);
+        const b = f.base.get(id);
+        if (!nv || !b) continue;
+        nv.ax = nv.tax = b.x + f.dx;
+        nv.ay = nv.tay = b.y + f.dy;
+        this.writeTransform(nv);
+        this.dirtyEdges.add(id);
+      }
+      this.kick();
     };
 
     // Re-check the target every frame: the camera may pan under a still pointer.
@@ -828,6 +873,26 @@ export class MapView {
       } catch {
         /* the pointer is already gone */
       }
+      if (p.free) {
+        const ids = this.visibleSubtree(p.id);
+        const base = new Map<Id, { x: number; y: number }>();
+        for (const id of ids) {
+          const v = this.nvs.get(id);
+          if (!v) continue;
+          // Settle any animation in flight so the drag starts from where the idea is going.
+          v.ax = v.tax;
+          v.ay = v.tay;
+          base.set(id, { x: v.ax, y: v.ay });
+        }
+        const free: Free = { ids, base, start: this.toWorld(p.x, p.y), dx: 0, dy: 0 };
+        document.body.classList.add('moving-free');
+        moving = { id: p.id, pointerId: p.pointerId, ghost: null, free, x: p.lx, y: p.ly, hit: null, raf: 0 };
+        this.dragging = true;
+        window.addEventListener('keydown', onMoveKey, true);
+        slide(free, p.lx, p.ly);
+        moving.raf = requestAnimationFrame(frame);
+        return;
+      }
       const ghost = document.createElement('div');
       ghost.className = 'drag-ghost';
       const hue = nv.el.style.getPropertyValue('--hue');
@@ -847,7 +912,7 @@ export class MapView {
       }
       document.body.append(ghost);
       document.body.classList.add('moving-idea');
-      moving = { id: p.id, pointerId: p.pointerId, ghost, x: p.lx, y: p.ly, hit: null, raf: 0 };
+      moving = { id: p.id, pointerId: p.pointerId, ghost, free: null, x: p.lx, y: p.ly, hit: null, raf: 0 };
       this.dragging = true;
       window.addEventListener('keydown', onMoveKey, true);
       track(p.lx, p.ly);
@@ -861,12 +926,23 @@ export class MapView {
       this.dragging = false;
       cancelAnimationFrame(m.raf);
       window.removeEventListener('keydown', onMoveKey, true);
-      m.ghost.remove();
-      document.body.classList.remove('moving-idea');
+      m.ghost?.remove();
+      document.body.classList.remove('moving-idea', 'moving-free');
       this.setDropMarks(null, null);
       // The browser still sends a click for this press; it is not one.
       swallowClick = true;
       setTimeout(() => (swallowClick = false), 0);
+      if (m.free) {
+        const { dx, dy } = m.free;
+        if (drop && Math.hypot(dx, dy) >= 1) this.events.freeMove(m.id, dx, dy);
+        else if (this.doc) {
+          // Cancelled: glide back to where layout puts them.
+          for (const id of m.free.ids) this.dirtyEdges.add(id);
+          this.place(this.doc);
+          this.kick();
+        }
+        return;
+      }
       if (drop && m.hit) this.events.drop(m.id, m.hit);
     };
 
@@ -887,7 +963,7 @@ export class MapView {
         if (press || moving || pointers.size || e.button !== 0) return;
         if (nodeEl.classList.contains('exit') || nodeEl.classList.contains('editing') || target.closest('[contenteditable]')) return;
         const touch = e.pointerType === 'touch';
-        press = { id: nodeEl.dataset.id!, pointerId: e.pointerId, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, touch, timer: 0 };
+        press = { id: nodeEl.dataset.id!, pointerId: e.pointerId, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, touch, free: e.altKey && !touch, timer: 0 };
         if (touch) press.timer = window.setTimeout(startMove, 420);
         return;
       }

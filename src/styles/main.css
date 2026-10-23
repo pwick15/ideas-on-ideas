@@ -750,7 +750,9 @@ kbd + kbd {
 }
 
 body.moving-idea,
-body.moving-idea * {
+body.moving-idea *,
+body.moving-free,
+body.moving-free * {
   cursor: grabbing !important;
 }
 

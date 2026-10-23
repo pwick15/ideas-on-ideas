@@ -33,6 +33,11 @@ export interface IdeaNode {
   spark?: string;
   /** Longer writing about the idea, kept with it but off the canvas. */
   note?: string;
+  /**
+   * Where the idea was dragged to, as an offset from its automatic position. Offsets add up
+   * down the tree, so moving an idea carries everything under it along.
+   */
+  off?: { x: number; y: number };
   created: number;
 }
 

@@ -75,6 +75,8 @@ function detach(tx: Tx, id: Id): number {
 
 function attach(tx: Tx, id: Id, parent: Id | null, index: number) {
   const n = tx.mut(id);
+  // A new home means a new automatic position.
+  delete n.off;
   n.parent = parent;
   const list = parent ? tx.mut(parent).children : tx.roots;
   const i = Math.max(0, Math.min(index, list.length));
@@ -169,6 +171,24 @@ export function patchNode(doc: MapDoc, id: Id, patch: Partial<IdeaNode>): MapDoc
   return tx.done();
 }
 
+/** Shifts an idea (and so everything under it) by a drag. Dragging it back to where it started clears the offset. */
+export function offsetNode(doc: MapDoc, id: Id, dx: number, dy: number): MapDoc {
+  const o = doc.nodes[id].off;
+  const x = Math.round((o?.x ?? 0) + dx);
+  const y = Math.round((o?.y ?? 0) + dy);
+  return patchNode(doc, id, { off: x || y ? { x, y } : undefined });
+}
+
+/** Sends dragged ideas back to their automatic positions: the whole map, or one idea's branch. Null when nothing was moved. */
+export function clearOffsets(doc: MapDoc, from?: Id): MapDoc | null {
+  const ids = from ? subtreeIds(doc.nodes, from) : Object.keys(doc.nodes);
+  const moved = ids.filter((id) => doc.nodes[id].off);
+  if (!moved.length) return null;
+  const tx = new Tx(doc);
+  for (const id of moved) delete tx.mut(id).off;
+  return tx.done();
+}
+
 export function setRating(doc: MapDoc, id: Id, rating: Rating | undefined): MapDoc {
   return patchNode(doc, id, { rating, cut: rating ? undefined : doc.nodes[id].cut });
 }
@@ -207,6 +227,8 @@ export function moveAmongSiblings(doc: MapDoc, id: Id, dir: -1 | 1): MapDoc | nu
   const target = n.parent ? tx.mut(n.parent).children : tx.roots;
   target.splice(i, 1);
   target.splice(j, 0, id);
+  // Dragged positions would hide the swap, so both ideas go back to their automatic spots.
+  for (const k of [id, target[i]]) if (tx.get(k)?.off) delete tx.mut(k).off;
   return tx.done();
 }
 
@@ -319,6 +341,8 @@ export function makeCenter(doc: MapDoc, id: Id): MapDoc | null {
   for (let i = 0; i < path.length - 1; i++) {
     const below = tx.mut(path[i]);
     const above = tx.mut(path[i + 1]);
+    delete below.off;
+    delete above.off;
     above.children.splice(above.children.indexOf(below.id), 1);
     below.children.push(above.id);
     above.parent = below.id;

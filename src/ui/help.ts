@@ -18,6 +18,7 @@ const GROUPS: { group: Group; title: string; extra?: [string, string][] }[] = [
     title: 'Shape',
     extra: [
       ['g', 'Move idea to… (or drag it)'],
+      ['alt+drag', 'Place idea freely (with its branches)'],
       ['alt+arrowup alt+arrowdown', 'Reorder'],
       ['alt+arrowleft alt+arrowright', 'Indent, outdent, switch side'],
     ],
