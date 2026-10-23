@@ -90,18 +90,6 @@ npm run build
 
 There are no runtime dependencies apart from two self-hosted font packages (Instrument Sans and Instrument Serif), so the app makes no network requests after it loads.
 
-## Deploy on Cloudflare Pages (from GitHub)
-
-1. Push this folder to a GitHub repository.
-2. In the Cloudflare dashboard, go to **Workers & Pages**, then **Create**, then the **Pages** tab, then **Connect to Git**, and pick the repository.
-3. Use these build settings:
-   - Framework preset: **None**
-   - Build command: `npm run build`
-   - Build output directory: `dist`
-4. Save and deploy. Every push to your production branch redeploys.
-
-The `.node-version` file pins Node 22.16.0 for the build, which Cloudflare's build image reads. `public/_headers` gives the hashed files in `/assets/` a one-year immutable cache and adds a few basic security headers.
-
 ## Project layout
 
 ```
