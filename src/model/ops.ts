@@ -213,13 +213,18 @@ export function deleteNode(doc: MapDoc, id: Id): { doc: MapDoc; focus: Id | null
   return { doc: tx.done(), focus };
 }
 
+/** Only the balanced layout splits first-level branches into side columns; other layouts keep a stale `side` that must not block reordering. */
+function columnsBySide(doc: MapDoc, n: IdeaNode): boolean {
+  return doc.layout === 'balanced' && n.side !== undefined && !!n.parent && !doc.nodes[n.parent].parent;
+}
+
 /** Swap with the previous (-1) or next (+1) sibling. First-level branches only swap within their side. */
 export function moveAmongSiblings(doc: MapDoc, id: Id, dir: -1 | 1): MapDoc | null {
   const n = doc.nodes[id];
   const list = n.parent ? doc.nodes[n.parent].children : doc.roots;
   const i = list.indexOf(id);
   let j = i + dir;
-  if (n.side !== undefined && n.parent && !doc.nodes[n.parent].parent) {
+  if (columnsBySide(doc, n)) {
     while (j >= 0 && j < list.length && (doc.nodes[list[j]].side ?? 1) !== n.side) j += dir;
   }
   if (j < 0 || j >= list.length) return null;
@@ -238,7 +243,7 @@ export function indent(doc: MapDoc, id: Id): MapDoc | null {
   if (!n.parent) return null;
   const sibs = doc.nodes[n.parent].children;
   let i = sibs.indexOf(id) - 1;
-  if (n.side !== undefined && !doc.nodes[n.parent].parent) {
+  if (columnsBySide(doc, n)) {
     while (i >= 0 && (doc.nodes[sibs[i]].side ?? 1) !== n.side) i--;
   }
   if (i < 0) return null;
