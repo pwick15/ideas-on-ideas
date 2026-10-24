@@ -24,7 +24,8 @@ Sources: [Diehl and Stroebe, via SE University PDF](https://homepages.se.edu/cvo
 ## Features
 
 - **Map kinds.** Brainstorm, Video, Short, Article, Software, Starburst (who/what/when/where/why/how) and SCAMPER. Each one seeds a few starter branches and weights the spark deck toward that kind of work. A short-form map asks about the first 1.5 seconds and loops; a software map asks who the first user is and what to cut.
-- **More than one center.** `N` adds another central idea on the same map. `L` draws a dotted bridge between any two ideas, across branches or centers.
+- **More than one center.** `N` adds another central idea on the same map.
+- **Bridges.** A tree gives every idea one parent, but real things relate in several ways at once. `L` draws a dotted bridge between any two ideas, across branches or centers, then asks how they relate ("flows into", "backs up", "same tier as"). `Tab` flips the direction between plain, one way and the reverse. Labels get a colour each, one-way bridges get an arrowhead, and the bridges on the focused idea light up. `B` opens a drawer with the focused idea's bridges split into goes to, comes from and linked with. `Enter` follows one to the idea at the other end and the drawer comes along, so you can walk a chain. `Tab` in the drawer lists every bridge on the map grouped by label, and selecting a bridge highlights every other bridge with the same label. Bridges are exported in the Markdown map as `A -> B (label)`.
 - **Move ideas around.** Drag an idea onto another to nest it there, or onto the top or bottom edge of one to place it before or after. On a touch screen, hold the idea first. From the keyboard, `G` picks a new home with the arrows or jump letters: `Enter` puts it inside, `Shift+Enter` puts it after. `Alt` + arrows still nudge an idea one step at a time.
 - **Select several.** `Shift+click` (or `Cmd/Ctrl+click`) adds or removes an idea. From the keyboard, `Shift+↑/↓` extends the selection along a row of ideas from where you started, and the same key backs it off again. Then move them together: drag any selected idea onto a new home, press `G` and pick one with the arrows, or use `Alt` + arrows to reorder, indent or outdent the group. `Backspace` deletes them (undo brings them back) and `Esc` clears the selection. An idea picked along with its parent just rides along with it.
 - **Place ideas freely.** Hold `Alt` and drag an idea (or a whole selection) to leave it exactly where you drop it. Its branches go with it, and branch lines and links redraw from the new spot. `Esc` mid-drag cancels. "Put dragged ideas back in place" in the command palette undoes it for the focused branch, or the whole map. Switching layout or moving an idea to a new parent also resets its position. Mouse only for now.
@@ -53,6 +54,7 @@ Sources: [Diehl and Stroebe, via SE University PDF](https://homepages.se.edu/cvo
 | `Shift+click`, `Shift+↑/↓` | Select several ideas |
 | `Alt` + drag | Place an idea freely, with its branches |
 | `Alt` + arrows | Reorder, indent, outdent, switch side |
+| `L` / `B` | Bridge to another idea / see an idea's bridges |
 | `Shift+C` | Make the idea the center |
 | `S` | Spark |
 | `1` `2` `3` / `X` | Rate / cut |

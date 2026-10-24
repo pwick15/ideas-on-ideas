@@ -1,4 +1,4 @@
-import { subtreeSize } from '../model/tree';
+import { labelHues, subtreeSize } from '../model/tree';
 import type { Camera, Id, LayoutKind, MapDoc, Side } from '../model/types';
 import { edgePath, linkPath } from './geometry';
 import { anchorOf, boxFrom, computeLayout, type Anchor, type Box, type Placement } from './layout';
@@ -70,6 +70,16 @@ export interface ViewEvents {
   freeMove(ids: Id[], dx: number, dy: number): void;
 }
 
+interface LinkRec {
+  g: SVGGElement;
+  path: SVGPathElement;
+  head: SVGPathElement;
+  text: SVGTextElement;
+  a: Id;
+  b: Id;
+  dir: boolean;
+}
+
 export class MapView {
   readonly el: HTMLDivElement;
   private world: HTMLDivElement;
@@ -80,7 +90,7 @@ export class MapView {
 
   private nvs = new Map<Id, NV>();
   private edges = new Map<Id, SVGPathElement>();
-  private links = new Map<Id, { el: SVGPathElement; a: Id; b: Id }>();
+  private links = new Map<Id, LinkRec>();
   private kidsOf = new Map<Id, Id[]>();
   private parentOf = new Map<Id, Id | null>();
 
@@ -406,34 +416,68 @@ export class MapView {
 
   private syncLinks(doc: MapDoc, visible: Set<Id>) {
     const want = new Set<Id>();
+    const hues = labelHues(doc);
     for (const l of doc.links) {
       if (!visible.has(l.a) || !visible.has(l.b)) continue;
       want.add(l.id);
       let rec = this.links.get(l.id);
       if (!rec) {
-        const el = document.createElementNS(SVG_NS, 'path');
-        el.classList.add('link');
-        this.linkLayer.append(el);
-        rec = { el, a: l.a, b: l.b };
+        const g = document.createElementNS(SVG_NS, 'g');
+        g.classList.add('link-g');
+        const path = document.createElementNS(SVG_NS, 'path');
+        path.classList.add('link');
+        const head = document.createElementNS(SVG_NS, 'path');
+        head.classList.add('link-head');
+        const text = document.createElementNS(SVG_NS, 'text');
+        text.classList.add('link-label');
+        text.setAttribute('text-anchor', 'middle');
+        g.append(path, head, text);
+        this.linkLayer.append(g);
+        rec = { g, path, head, text, a: l.a, b: l.b, dir: !!l.dir };
         this.links.set(l.id, rec);
       }
       rec.a = l.a;
       rec.b = l.b;
-      this.updateLink(rec.el, l.a, l.b);
+      rec.dir = !!l.dir;
+      const hue = l.label ? hues.get(l.label.toLowerCase()) : undefined;
+      if (hue === undefined) rec.g.style.removeProperty('--lh');
+      else rec.g.style.setProperty('--lh', String(hue));
+      rec.g.classList.toggle('labelled', !!l.label);
+      if (rec.text.textContent !== (l.label ?? '')) rec.text.textContent = l.label ?? '';
+      this.updateLink(rec);
     }
     for (const [id, rec] of this.links) {
       if (!want.has(id)) {
-        rec.el.remove();
+        rec.g.remove();
         this.links.delete(id);
       }
     }
+    this.markLinks();
   }
 
-  private updateLink(el: SVGPathElement, a: Id, b: Id) {
-    const na = this.nvs.get(a);
-    const nb = this.nvs.get(b);
+  private updateLink(rec: LinkRec) {
+    const na = this.nvs.get(rec.a);
+    const nb = this.nvs.get(rec.b);
     if (!na || !nb) return;
-    el.setAttribute('d', linkPath(this.box(na), this.box(nb)).d);
+    const p = linkPath(this.box(na), this.box(nb));
+    rec.path.setAttribute('d', p.d);
+    if (rec.dir) rec.head.setAttribute('d', p.head);
+    else rec.head.removeAttribute('d');
+    rec.text.setAttribute('x', String(p.mid.x));
+    rec.text.setAttribute('y', String(p.mid.y));
+  }
+
+  /** Bridges touching the focused idea stand out; the rest recede. */
+  private markLinks() {
+    for (const rec of this.links.values()) {
+      rec.g.classList.toggle('on', !!this.focusId && (rec.a === this.focusId || rec.b === this.focusId));
+    }
+  }
+
+  /** Dims every bridge except these, for following one kind of connection across the map. */
+  setLinkSpotlight(ids: ReadonlySet<Id> | null) {
+    this.el.classList.toggle('link-spot', !!ids);
+    for (const [id, rec] of this.links) rec.g.classList.toggle('lit', !!ids?.has(id));
   }
 
   private updateEdge(childId: Id) {
@@ -502,7 +546,7 @@ export class MapView {
     if (this.dirtyEdges.size) {
       for (const id of this.dirtyEdges) this.updateEdge(id);
       for (const rec of this.links.values()) {
-        if (this.dirtyEdges.has(rec.a) || this.dirtyEdges.has(rec.b)) this.updateLink(rec.el, rec.a, rec.b);
+        if (this.dirtyEdges.has(rec.a) || this.dirtyEdges.has(rec.b)) this.updateLink(rec);
       }
       if (this.linkPreview) this.drawPreview();
       this.dirtyEdges.clear();
@@ -669,6 +713,7 @@ export class MapView {
       nv?.el.classList.add('focused');
       this.el.setAttribute('aria-activedescendant', 'n-' + id);
     }
+    this.markLinks();
   }
 
   /** Paints the ideas picked as a group. */

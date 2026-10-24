@@ -1,8 +1,8 @@
 import type { App } from '../app/app';
-import { toggleLink } from '../model/ops';
 import type { Id } from '../model/types';
 import { h, type Layer } from './dom';
 import { JumpHints } from './jump';
+import { LinkEditor } from './linkedit';
 
 /** Pick a second idea to bridge to. Arrows or jump letters choose, Enter connects. */
 export class LinkMode implements Layer {
@@ -32,10 +32,8 @@ export class LinkMode implements Layer {
       this.app.view.flash(this.from, 'bump');
       return;
     }
-    const r = toggleLink(this.app.doc, this.from, to);
     this.app.popLayer(this);
-    this.app.commit(r.doc);
-    this.app.toast(r.added ? 'Bridge added' : 'Bridge removed', r.added ? 'good' : 'info');
+    this.app.pushLayer(new LinkEditor(this.app, this.from, to));
   }
 
   key(_e: KeyboardEvent, combo: string): boolean {
@@ -83,7 +81,7 @@ export class LinkMode implements Layer {
     return [
       ['arrowup arrowdown arrowleft arrowright', 'choose'],
       ['f', 'jump'],
-      ['enter', 'connect'],
+      ['enter', 'connect and name it'],
       ['escape', 'cancel'],
     ];
   }

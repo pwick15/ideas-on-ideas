@@ -30,6 +30,8 @@
   --gold-ink: #1d1604;
   --danger: oklch(0.7 0.17 28);
   --link: oklch(0.8 0.08 300);
+  --link-l: 0.8;
+  --link-c: 0.11;
   --b-l: 0.8;
   --b-c: 0.125;
   --edge-a: 0.72;
@@ -59,6 +61,8 @@
   --gold-ink: #fffaf0;
   --danger: oklch(0.58 0.19 28);
   --link: oklch(0.55 0.12 300);
+  --link-l: 0.55;
+  --link-c: 0.14;
   --b-l: 0.57;
   --b-c: 0.14;
   --edge-a: 0.85;
@@ -251,14 +255,53 @@ kbd + kbd {
   opacity: 0;
 }
 
+.link-g {
+  --lc: var(--link);
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.link-g.labelled {
+  --lc: oklch(var(--link-l) var(--link-c) var(--lh, 300));
+}
+
+.link-g.on,
+.viewport.link-spot .link-g.lit {
+  opacity: 1;
+}
+
 .link {
   fill: none;
-  stroke: var(--link);
+  stroke: var(--lc);
   stroke-width: 1.6;
   stroke-dasharray: 2 6;
   stroke-linecap: round;
-  opacity: 0.85;
-  transition: opacity 0.2s;
+}
+
+.link-g.on .link {
+  stroke-width: 2.2;
+}
+
+.link-head {
+  fill: var(--lc);
+  stroke: var(--lc);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+
+.link-label {
+  fill: var(--lc);
+  font: 600 11px var(--font-ui);
+  letter-spacing: 0.02em;
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 5px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.viewport.link-spot .link-g:not(.lit) {
+  opacity: 0.08;
 }
 
 .link.preview {
@@ -646,7 +689,7 @@ kbd + kbd {
 }
 
 .viewport.spotlit .edge:not(.lit),
-.viewport.spotlit .link {
+.viewport.spotlit .link-g {
   opacity: 0.08;
 }
 
@@ -1169,6 +1212,7 @@ body.moving-free * {
 
 .palette-input:focus-visible,
 .composer-input:focus-visible,
+.link-input:focus-visible,
 .search-input:focus-visible {
   outline: none;
 }
@@ -1404,12 +1448,14 @@ body.moving-free * {
 /* Composer, sprint, welcome */
 .panel.composer,
 .panel.sprint,
+.panel.link-editor,
 .panel.welcome {
   padding: 22px 24px 0;
 }
 
 .panel.composer .panel-foot,
-.panel.sprint .panel-foot {
+.panel.sprint .panel-foot,
+.panel.link-editor .panel-foot {
   margin: 0 -24px;
 }
 
@@ -1629,6 +1675,131 @@ body.moving-free * {
   gap: 8px;
   padding: 10px 16px;
   border-top: 1px solid var(--line);
+}
+
+/* Bridges drawer */
+.drawer.bridges {
+  width: min(400px, calc(100vw - 24px));
+}
+
+.bridge-item {
+  padding: 9px 12px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.bridge-item.sel {
+  background: var(--surface-2);
+  box-shadow: inset 2px 0 0 var(--gold);
+}
+
+.bi-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+
+.bi-arrow {
+  color: var(--text-3);
+}
+
+.bi-chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--bi-c) 16%, transparent);
+  color: var(--bi-c);
+  --bi-c: oklch(var(--link-l) var(--link-c) var(--lh, 300));
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bi-chip.none {
+  --bi-c: var(--text-3);
+  font-weight: 500;
+}
+
+.tier .bi-chip {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.tier .muted {
+  margin-left: auto;
+  font-weight: 500;
+}
+
+/* Naming a bridge */
+.link-ends {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 0 14px;
+  font: 400 21px/1.2 var(--font-display);
+}
+
+.link-end {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.link-arrow {
+  flex: none;
+  min-width: 40px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-2);
+  background: none;
+  color: var(--gold);
+  font: 600 18px/1 var(--font-ui);
+  cursor: pointer;
+}
+
+.link-arrow.plain {
+  color: var(--text-3);
+}
+
+.link-arrow:hover {
+  background: var(--surface-2);
+}
+
+.link-input {
+  width: 100%;
+  padding: 10px 0 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line-2);
+  outline: none;
+  background: none;
+  color: var(--text);
+  font: 400 17px var(--font-ui);
+}
+
+.link-input::placeholder {
+  color: var(--text-3);
+}
+
+.link-chips {
+  min-height: 52px;
+  padding: 14px 0 6px;
+}
+
+.link-chips .chip {
+  padding: 5px 10px;
+  font-size: 12.5px;
+  color: oklch(var(--link-l) var(--link-c) var(--lh, 300));
+}
+
+.link-chips .chip.sel {
+  background: color-mix(in oklch, currentColor 18%, transparent);
+  border-color: currentColor;
+}
+
+.chip-n {
+  opacity: 0.6;
+  font-size: 11px;
 }
 
 /* Notes drawer */

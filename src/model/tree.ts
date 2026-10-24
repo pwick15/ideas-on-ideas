@@ -121,3 +121,14 @@ export function pathText(nodes: Nodes, id: Id): string[] {
   const ids = ancestors(nodes, id).reverse();
   return ids.map((a) => nodes[a].text || 'Untitled');
 }
+
+/** One hue per distinct bridge label, in order of first use, so labels on a map never share a colour until there are more than eight. */
+export function labelHues(doc: MapDoc): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const l of doc.links) {
+    if (!l.label) continue;
+    const k = l.label.toLowerCase();
+    if (!out.has(k)) out.set(k, HUES[out.size % HUES.length]);
+  }
+  return out;
+}

@@ -41,11 +41,16 @@ export interface IdeaNode {
   created: number;
 }
 
-/** A bridge between two ideas anywhere on the map, outside the tree structure. */
+/**
+ * A bridge between two ideas anywhere on the map, outside the tree structure. A label says how
+ * they relate ("flows into", "backs up"). With `dir` the relation runs from `a` to `b`.
+ */
 export interface Link {
   id: Id;
   a: Id;
   b: Id;
+  label?: string;
+  dir?: boolean;
 }
 
 export interface Camera {

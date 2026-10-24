@@ -1343,7 +1343,7 @@ function cloneDoc(src: MapDoc): MapDoc {
     id: fresh(),
     nodes,
     roots: src.roots.map((r) => map.get(r)!),
-    links: (src.links ?? []).map((l) => ({ id: fresh(), a: map.get(l.a)!, b: map.get(l.b)! })).filter((l) => l.a && l.b),
+    links: (src.links ?? []).map((l) => ({ ...l, id: fresh(), a: map.get(l.a)!, b: map.get(l.b)! })).filter((l) => l.a && l.b),
     created: now,
     updated: now,
     view: undefined,

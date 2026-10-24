@@ -1,3 +1,4 @@
+import { BridgesPanel } from '../ui/bridges';
 import { Composer } from '../ui/composer';
 import { Harvest } from '../ui/harvest';
 import { Help } from '../ui/help';
@@ -97,7 +98,16 @@ export function buildCommands(app: App): Command[] {
     { id: 'shape.wide', title: 'Wrap or unwrap text', group: 'Shape', keys: ['w'], run: () => app.toggleWide(), when: hasFocus, hint: 'Long text and links run on one line.' },
     { id: 'shape.unfoldAll', title: 'Unfold everything', group: 'Shape', keys: ['shift+z'], run: () => app.unfoldAll() },
     { id: 'shape.color', title: 'Change branch colour', group: 'Shape', keys: ['c'], run: () => app.cycleHue(), when: hasFocus },
-    { id: 'shape.link', title: 'Bridge to another idea', group: 'Shape', keys: ['l'], run: () => app.pushLayer(new LinkMode(app)), when: hasFocus, hint: 'Connect ideas across branches or centers.' },
+    { id: 'shape.link', title: 'Bridge to another idea', group: 'Shape', keys: ['l'], run: () => app.pushLayer(new LinkMode(app)), when: hasFocus, hint: 'Connect ideas across branches, then name how they relate and which way it runs.' },
+    {
+      id: 'shape.bridges',
+      title: 'Bridges on this idea',
+      group: 'Shape',
+      keys: ['b'],
+      run: () => app.pushLayer(new BridgesPanel(app, app.focus!)),
+      when: hasFocus,
+      hint: 'What this idea connects to, split by direction. Enter follows one. Tab lists every bridge on the map.',
+    },
     { id: 'shape.dup', title: 'Duplicate idea', group: 'Shape', keys: ['mod+d'], run: () => app.dup(), when: hasFocus },
     { id: 'shape.copy', title: 'Copy idea as Markdown', group: 'Shape', keys: ['mod+c'], run: () => app.copy(false), when: hasFocus },
     { id: 'shape.cut', title: 'Cut idea to clipboard', group: 'Shape', keys: ['mod+x'], run: () => app.copy(true), when: hasFocus },

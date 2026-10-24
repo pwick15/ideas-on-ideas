@@ -43,7 +43,8 @@ export function mapToMarkdown(doc: MapDoc, includeCut = true): string {
     for (const l of doc.links) {
       const a = doc.nodes[l.a]?.text ?? '?';
       const b = doc.nodes[l.b]?.text ?? '?';
-      lines.push(`- ${a} <-> ${b}`);
+      const arrow = l.dir ? '->' : '<->';
+      lines.push(`- ${a} ${arrow} ${b}${l.label ? ` (${l.label})` : ''}`);
     }
   }
   return lines.join('\n') + '\n';

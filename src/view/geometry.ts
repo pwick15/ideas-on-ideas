@@ -98,8 +98,8 @@ function exitPoint(b: Box, toward: P, pad = 4): P {
   return { x: c.x + dx * t, y: c.y + dy * t };
 }
 
-/** A gently bowed curve between two ideas, for bridges. */
-export function linkPath(a: Box, b: Box): { d: string; a: P; b: P } {
+/** A gently bowed curve between two ideas, for bridges. `mid` sits on the curve for a label; `head` is the arrowhead at `b`. */
+export function linkPath(a: Box, b: Box): { d: string; a: P; b: P; mid: P; head: string } {
   const ca = { x: a.x + a.w / 2, y: a.y + a.h / 2 };
   const cb = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
   const len = Math.hypot(cb.x - ca.x, cb.y - ca.y) || 1;
@@ -108,5 +108,12 @@ export function linkPath(a: Box, b: Box): { d: string; a: P; b: P } {
   const ctrl = { x: (ca.x + cb.x) / 2 + n.x * bow, y: (ca.y + cb.y) / 2 + n.y * bow };
   const pa = exitPoint(a, ctrl);
   const pb = exitPoint(b, ctrl);
-  return { d: `M${f(pa.x)} ${f(pa.y)}Q${f(ctrl.x)} ${f(ctrl.y)} ${f(pb.x)} ${f(pb.y)}`, a: pa, b: pb };
+  const mid = { x: pa.x * 0.25 + ctrl.x * 0.5 + pb.x * 0.25, y: pa.y * 0.25 + ctrl.y * 0.5 + pb.y * 0.25 };
+  // The curve arrives at `b` heading away from the control point.
+  const tl = Math.hypot(pb.x - ctrl.x, pb.y - ctrl.y) || 1;
+  const t = { x: (pb.x - ctrl.x) / tl, y: (pb.y - ctrl.y) / tl };
+  const bx = pb.x - t.x * 10;
+  const by = pb.y - t.y * 10;
+  const head = `M${f(pb.x)} ${f(pb.y)}L${f(bx - t.y * 5)} ${f(by + t.x * 5)}L${f(bx + t.y * 5)} ${f(by - t.x * 5)}Z`;
+  return { d: `M${f(pa.x)} ${f(pa.y)}Q${f(ctrl.x)} ${f(ctrl.y)} ${f(pb.x)} ${f(pb.y)}`, a: pa, b: pb, mid, head };
 }

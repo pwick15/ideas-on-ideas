@@ -392,12 +392,59 @@ function restyle(tx: Tx, rootId: Id) {
   });
 }
 
+/** Trims and collapses whitespace so "Flows  into " and "flows into" count as one label. */
+export function cleanLabel(label: string | undefined): string | undefined {
+  return label?.replace(/\s+/g, ' ').trim() || undefined;
+}
+
+export const labelKey = (label: string | undefined) => (label ?? '').toLowerCase();
+
+export function findLink(doc: MapDoc, a: Id, b: Id): Link | undefined {
+  return doc.links.find((l) => (l.a === a && l.b === b) || (l.a === b && l.b === a));
+}
+
 export function toggleLink(doc: MapDoc, a: Id, b: Id): { doc: MapDoc; added: boolean } {
-  const existing = doc.links.find((l) => (l.a === a && l.b === b) || (l.a === b && l.b === a));
+  const existing = findLink(doc, a, b);
   const tx = new Tx(doc);
   if (existing) tx.links = doc.links.filter((l) => l !== existing);
   else tx.links = [...doc.links, { id: uid(), a, b }];
   return { doc: tx.done(), added: !existing };
+}
+
+/** Adds a bridge, or rewrites the one that already joins these two ideas. */
+export function setLink(doc: MapDoc, a: Id, b: Id, label?: string, dir?: boolean): MapDoc {
+  const tx = new Tx(doc);
+  const next: Link = { id: findLink(doc, a, b)?.id ?? uid(), a, b };
+  const clean = cleanLabel(label);
+  if (clean) next.label = clean;
+  if (dir) next.dir = true;
+  tx.links = doc.links.some((l) => l.id === next.id) ? doc.links.map((l) => (l.id === next.id ? next : l)) : [...doc.links, next];
+  return tx.done();
+}
+
+export function removeLink(doc: MapDoc, id: Id): MapDoc {
+  const tx = new Tx(doc);
+  tx.links = doc.links.filter((l) => l.id !== id);
+  return tx.done();
+}
+
+/** Bridges that touch an idea. */
+export function linksOf(doc: MapDoc, id: Id): Link[] {
+  return doc.links.filter((l) => l.a === id || l.b === id);
+}
+
+/** Every label in use, most used first. Different capitalisation counts as the same label. */
+export function labelsInUse(doc: MapDoc): { label: string; count: number; dir: boolean }[] {
+  const seen = new Map<string, { label: string; count: number; dir: boolean }>();
+  for (const l of doc.links) {
+    if (!l.label) continue;
+    const k = labelKey(l.label);
+    const s = seen.get(k) ?? { label: l.label, count: 0, dir: false };
+    s.count++;
+    s.dir ||= !!l.dir;
+    seen.set(k, s);
+  }
+  return [...seen.values()].sort((x, y) => y.count - x.count || x.label.localeCompare(y.label));
 }
 
 export interface ForestNode {
