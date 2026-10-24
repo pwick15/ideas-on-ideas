@@ -1449,14 +1449,44 @@ body.moving-free * {
 .panel.composer,
 .panel.sprint,
 .panel.link-editor,
+.panel.paste-import,
 .panel.welcome {
   padding: 22px 24px 0;
 }
 
 .panel.composer .panel-foot,
 .panel.sprint .panel-foot,
-.panel.link-editor .panel-foot {
+.panel.link-editor .panel-foot,
+.panel.paste-import .panel-foot {
   margin: 0 -24px;
+}
+
+.panel.paste-import > .muted {
+  margin: 6px 0 12px;
+}
+
+.paste-input {
+  width: 100%;
+  height: 260px;
+  min-height: 120px;
+  resize: vertical;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  outline: none;
+  background: none;
+  color: var(--text);
+  font: 400 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  scrollbar-width: thin;
+}
+
+.paste-input:focus-visible {
+  border-color: var(--gold);
+}
+
+.paste-input::placeholder {
+  color: var(--text-3);
 }
 
 .composer-eyebrow {

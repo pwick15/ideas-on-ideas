@@ -1228,7 +1228,8 @@ export class App {
     input.click();
   }
 
-  private importJson(text: string) {
+  /** Adds the maps in a backup. Returns false, with a toast, when the text is not one. */
+  importJson(text: string): boolean {
     try {
       const data = JSON.parse(text) as { maps?: MapDoc[] };
       const maps = (data.maps ?? []).filter((m) => m && m.v === 1 && m.nodes && Array.isArray(m.roots));
@@ -1242,8 +1243,10 @@ export class App {
       }
       if (last) this.load(last);
       this.toast(`Imported ${maps.length} ${maps.length === 1 ? 'map' : 'maps'}`, 'good');
+      return true;
     } catch {
-      this.toast('That file is not an Ideas on Ideas backup', 'warn');
+      this.toast('That is not an Ideas on Ideas backup', 'warn');
+      return false;
     }
   }
 

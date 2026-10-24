@@ -6,6 +6,7 @@ import type { MapMeta } from '../model/types';
 import { Composer } from './composer';
 import { Confirm } from './confirm';
 import { fuzzy, h, icon, modal, relTime, type Layer } from './dom';
+import { PasteImport } from './pasteimport';
 
 export class MapsPanel implements Layer {
   readonly name = 'maps';
@@ -34,7 +35,12 @@ export class MapsPanel implements Layer {
       app.popLayer(this);
       app.importBackup();
     });
-    foot.append(h('span', 'grow'), backup, imp);
+    const paste = h('button', { class: 'text-btn', type: 'button' }, 'Paste JSON');
+    paste.addEventListener('click', () => {
+      app.popLayer(this);
+      app.pushLayer(new PasteImport(app));
+    });
+    foot.append(h('span', 'grow'), backup, imp, paste);
     const head = h('div', 'panel-head', h('h2', '', 'Maps'), h('span', 'muted', 'Stored in this browser only'));
     this.wrap = modal('maps', () => app.popLayer(this), head, this.input, this.list, foot);
     this.input.addEventListener('input', () => {

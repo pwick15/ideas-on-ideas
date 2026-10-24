@@ -8,6 +8,7 @@ import { MapsPanel } from '../ui/maps';
 import { MoveMode } from '../ui/movemode';
 import { NotesPanel } from '../ui/notes';
 import { Palette } from '../ui/palette';
+import { PasteImport } from '../ui/pasteimport';
 import { Prune } from '../ui/prune';
 import { Search } from '../ui/search';
 import { SprintSetup, stopSprint } from '../ui/sprint';
@@ -165,6 +166,7 @@ export function buildCommands(app: App): Command[] {
     { id: 'maps.exportJson', title: 'Download this map as JSON', group: 'Maps', run: () => app.exportMapJson() },
     { id: 'maps.backup', title: 'Back up all maps (JSON)', group: 'Maps', run: () => app.exportBackup() },
     { id: 'maps.import', title: 'Import backup or Markdown outline', group: 'Maps', run: () => app.importBackup() },
+    { id: 'maps.importPaste', title: 'Import from pasted JSON', group: 'Maps', run: () => app.pushLayer(new PasteImport(app)) },
 
     // App
     { id: 'app.palette', title: 'Command palette', group: 'App', keys: ['mod+k'], run: () => app.pushLayer(new Palette(app)), hidden: true },

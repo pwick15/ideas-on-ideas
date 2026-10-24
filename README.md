@@ -35,7 +35,7 @@ Sources: [Diehl and Stroebe, via SE University PDF](https://homepages.se.edu/cvo
 - **Jump anywhere.** `F` puts a letter on every visible idea; type it to fly there. `/` searches every idea, including folded ones.
 - **Command palette.** `⌘K` (Ctrl+K on Windows and Linux) finds every action and every map.
 - **Paste lists.** Paste an indented or bulleted list and it becomes a branch. Markdown exported from the app pastes back with ratings, cuts and notes intact (notes are the `>` quote lines under an idea).
-- **Export.** Copy a branch, the map or the harvest as Markdown. Download a JSON backup of every map and import it again elsewhere.
+- **Export.** Copy a branch, the map or the harvest as Markdown. Download a JSON backup of every map and import it again elsewhere. If you have the JSON as text, "Import from pasted JSON" in the palette (or **Paste JSON** in the maps panel) takes it without a file; `⌘Enter` imports.
 - **Light and dark themes**, following the system by default (`Shift+T` switches).
 - **Touch.** Phones and tablets get a small toolbar, pinch to zoom and drag to pan. It is built for a keyboard first, though.
 
